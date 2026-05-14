@@ -1,0 +1,19 @@
+# Environment (contains real API keys)
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+
+# Qdrant storage
+.qdrant_storage/
+
+# OS
+Thumbs.db
+.DS_Store

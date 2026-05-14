@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Activiity Chatbot</title>
+  <style>
+    /* Technical Precision Design System */
+    :root {
+      --surface: #051424;
+      --surface-container-low: #0d1c2d;
+      --surface-container: #122131;
+      --surface-container-high: #1c2b3c;
+      --surface-container-highest: #273647;
+      --on-surface: #d4e4fa;
+      --on-surface-variant: #a6b5c8;
+      --primary: #ec4899;
+      --primary-on: #ffffff;
+      --primary-container: #f751a1;
+      --outline: #334155;
+      --outline-variant: #574048;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Geist', -apple-system, sans-serif; background: var(--surface); color: var(--on-surface); }
+    
+    /* Header */
+    .header {
+      height: 56px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--outline);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+      color: var(--on-surface);
+    }
+    .logo {
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, var(--primary), #be123c);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--primary-on);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .nav { display: flex; gap: 8px; }
+    .nav button {
+      background: none;
+      border: 1px solid transparent;
+      color: var(--on-surface-variant);
+      padding: 6px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .nav button:hover { color: var(--on-surface); border-color: var(--outline); }
+    .nav button.active { color: var(--primary); border-color: var(--primary); background: rgba(236,72,153,0.1); }
+    
+    /* Layout */
+    .container {
+      margin-top: 56px;
+      display: flex;
+      height: calc(100vh - 56px);
+    }
+    
+    /* Sidebar */
+    .sidebar {
+      width: 280px;
+      background: var(--surface);
+      border-right: 1px solid var(--outline);
+      overflow-y: auto;
+      padding: 16px;
+    }
+    .section { margin-bottom: 20px; }
+    .section-title {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--on-surface-variant);
+      margin-bottom: 10px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    
+    .api-key { width: 100%; padding: 10px 12px; background: var(--surface-container-low); border: 1px solid var(--outline); border-radius: 4px; color: var(--on-surface); font-size: 13px; }
+    .api-key:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(236,72,153,0.2); }
+    .btn-save { padding: 8px 16px; background: var(--surface-container-high); border: 1px solid var(--outline); border-radius: 4px; color: var(--on-surface); cursor: pointer; font-size: 12px; font-family: 'JetBrains Mono', monospace; }
+    .btn-save:hover { border-color: var(--primary); color: var(--primary); }
+    
+    .mode-btns { display: flex; gap: 8px; }
+    .mode-btn { flex: 1; padding: 10px; border: 1px solid var(--outline); background: var(--surface-container-low); color: var(--on-surface-variant); border-radius: 4px; cursor: pointer; font-size: 13px; }
+    .mode-btn:hover { border-color: var(--outline-variant); color: var(--on-surface); }
+    .mode-btn.active { border-color: var(--primary); background: rgba(236,72,153,0.1); color: var(--primary); }
+    
+    .model-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border: 1px solid var(--outline);
+      background: var(--surface-container-low);
+      border-radius: 4px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      color: var(--on-surface-variant);
+      font-size: 13px;
+    }
+    .model-item:hover { border-color: var(--outline-variant); }
+    .model-item.selected { border-color: var(--primary); background: rgba(236,72,153,0.1); color: var(--primary); }
+    .model-item input { accent-color: var(--primary); }
+    .model-check { color: var(--primary); margin-left: auto; }
+    
+    select { width: 100%; padding: 10px 12px; background: var(--surface-container-low); border: 1px solid var(--outline); border-radius: 4px; color: var(--on-surface); font-size: 13px; cursor: pointer; }
+    select:focus { outline: none; border-color: var(--primary); }
+    
+    /* Main */
+    .main { flex: 1; display: flex; flex-direction: column; }
+    .workspace { flex: 1; overflow: auto; padding: 20px; background: var(--surface-container-low); }
+    
+    .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--on-surface-variant); text-align: center; }
+    .empty h2 { color: var(--on-surface); margin-bottom: 8px; font-weight: 600; }
+    .empty p { font-size: 13px; }
+    
+    .results { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+    .card { border: 1px solid var(--outline); border-radius: 8px; background: var(--surface-container-low); }
+    .card-header { padding: 12px 16px; background: var(--surface-container); border-bottom: 1px solid var(--outline); display: flex; justify-content: space-between; align-items: center; }
+    .card-title { font-weight: 600; color: var(--on-surface); font-size: 14px; }
+    .card-latency { color: var(--on-surface-variant); font-size: 12px; font-family: 'JetBrains Mono', monospace; }
+    .card-body { padding: 16px; }
+    .card-answer { font-size: 13px; color: var(--on-surface); line-height: 1.6; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; }
+    
+    .ragas { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--outline); }
+    .ragas-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--on-surface-variant); margin-bottom: 8px; font-family: 'JetBrains Mono', monospace; }
+    .ragas-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+    .ragas-item { background: var(--surface); padding: 8px; border-radius: 4px; }
+    .ragas-label { font-size: 10px; color: var(--on-surface-variant); text-transform: uppercase; font-family: 'JetBrains Mono', monospace; }
+    .ragas-value { font-size: 14px; font-weight: 600; color: var(--on-surface); font-family: 'JetBrains Mono', monospace; }
+    
+    .input-area { padding: 16px 20px; background: var(--surface); border-top: 1px solid var(--outline); display: flex; gap: 12px; }
+    .input-area textarea { flex: 1; padding: 12px 16px; background: var(--surface-container-low); border: 1px solid var(--outline); border-radius: 4px; color: var(--on-surface); resize: none; min-height: 60px; font-size: 14px; }
+    .input-area textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(236,72,153,0.2); }
+    .input-area textarea::placeholder { color: var(--on-surface-variant); }
+    .run-btn { padding: 12px 24px; background: linear-gradient(180deg, var(--primary), #db2777); border: none; border-radius: 4px; color: var(--primary-on); font-weight: 600; cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; }
+    .run-btn:hover { background: linear-gradient(180deg, #f472b6, var(--primary)); }
+    .run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top: 2px solid white; border-radius: 50%; animation: spin 0.8s linear infinite; display: none; }
+    .run-btn.loading .spinner { display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    
+    /* History Page */
+    .history-page { display: none; padding: 24px; background: var(--surface-container-low); }
+    .history-page.active { display: block; }
+    .history-header { margin-bottom: 24px; }
+    .history-header h1 { color: var(--on-surface); margin-bottom: 4px; font-size: 24px; font-weight: 600; }
+    .history-header p { color: var(--on-surface-variant); font-size: 14px; }
+    .history-filters { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+    .history-filters select, .history-filters input { padding: 10px 12px; background: var(--surface-container); border: 1px solid var(--outline); border-radius: 4px; color: var(--on-surface); font-size: 13px; }
+    .history-filters button { padding: 10px 16px; background: var(--surface-container-high); border: 1px solid var(--outline); border-radius: 4px; color: var(--on-surface); cursor: pointer; font-size: 13px; }
+    .history-filters button:hover { border-color: var(--primary); color: var(--primary); }
+    .history-list { display: flex; flex-direction: column; gap: 12px; }
+    .history-item { border: 1px solid var(--outline); border-radius: 8px; background: var(--surface-container); padding: 16px; }
+    .history-item:hover { border-color: var(--outline-variant); }
+    .history-top { display: flex; justify-content: space-between; margin-bottom: 8px; }
+    .history-id { color: var(--primary); font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+    .history-time { color: var(--on-surface-variant); font-size: 12px; }
+    .history-mode { color: var(--on-surface-variant); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; font-family: 'JetBrains Mono', monospace; margin-bottom: 8px; }
+    .history-q { color: var(--on-surface); font-weight: 500; margin-bottom: 8px; font-size: 14px; }
+    .history-a { font-size: 13px; color: var(--on-surface-variant); font-family: 'JetBrains Mono', monospace; line-height: 1.5; }
+    .history-empty { text-align: center; color: var(--on-surface-variant); padding: 60px; font-size: 14px; }
+    
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--surface); }
+    ::-webkit-scrollbar-thumb { background: var(--outline); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--outline-variant); }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-brand"><div class="logo">A</div>Activiity Chatbot</div>
+    <nav class="nav">
+      <button class="active" id="nav-workbench" onclick="app.setPage('workbench')">Workbench</button>
+      <button id="nav-history" onclick="app.setPage('history')">History</button>
+    </nav>
+  </header>
+
+  <div id="page-workbench" class="container">
+    <aside class="sidebar">
+      <div class="section">
+        <div class="section-title">API Key</div>
+        <input type="password" class="api-key" id="apiKey" placeholder="sk-or-v1-...">
+        <button class="btn-save" onclick="app.saveKey()">Save</button>
+        <span id="keyStatus" style="font-size:11px;color:#6b7f99;margin-left:8px;"></span>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">Mode</div>
+        <div class="mode-btns">
+          <button class="mode-btn active" id="btn-naive" onclick="app.setMode('naive')">Naive</button>
+          <button class="mode-btn" id="btn-agentic" onclick="app.setMode('agentic')">Agentic</button>
+        </div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">Models <span id="modelCount">(0)</span></div>
+        <div id="modelList"></div>
+      </div>
+      
+      <div class="section" id="routerDiv" style="display:none;">
+        <div class="section-title">Router</div>
+        <select id="routerSelect" onchange="app.setRouter(this.value)"></select>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">Test Pairs</div>
+        <select id="tierSelect" onchange="app.loadTier(this.value)">
+          <option value="reference">Reference (134)</option>
+          <option value="medium">Medium</option>
+          <option value="advanced">Advanced</option>
+        </select>
+        <select id="pairSelect" onchange="app.selectPair(this.value)">
+          <option value="">-- Select --</option>
+        </select>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="workspace" id="workspace">
+        <div class="empty"><h2>Select models and run a question</h2><p>Results will appear here</p></div>
+      </div>
+      <div class="input-area">
+        <textarea id="questionInput" placeholder="Type question..."></textarea>
+        <button class="run-btn" id="runBtn" onclick="app.run()"><span class="spinner"></span><span id="runBtnText">Ask</span></button>
+      </div>
+    </main>
+  </div>
+
+  <div id="page-history" class="history-page">
+    <div class="history-header"><h1>History</h1><p>Past conversations</p></div>
+    <div class="history-filters">
+      <select onchange="app.filterHistory(this.value)"><option value="all">All</option><option value="today">Today</option><option value="week">Week</option><option value="month">Month</option></select>
+      <input type="text" placeholder="Search..." oninput="app.searchHistory(this.value)" style="width:150px;">
+      <button onclick="app.exportHistory()">Export</button>
+      <button onclick="app.clearHistory()">Clear</button>
+    </div>
+    <div class="history-list" id="historyList"></div>
+  </div>
+
+  <script>
+  const app = {
+    data: {
+      mode: 'naive',
+      models: [],
+      router: '',
+      tier: 'reference',
+      pairs: [],
+      selectedPair: null,
+      groundTruth: '',
+      results: [],
+      apiKey: localStorage.getItem('activity_api_key') || '',
+      catalog: { naive: [], agentic_routers: [], agentic_synths: [] },
+      history: JSON.parse(localStorage.getItem('activity_history') || '[]'),
+    },
+    
+    async init() {
+      const cfg = await fetch('/api/config').then(r => r.json());
+      this.data.catalog = cfg.model_catalog;
+      await this.loadTier('reference');
+      this.data.models = [cfg.model_defaults.naive];
+      if (this.data.apiKey) document.getElementById('apiKey').value = this.data.apiKey;
+      this.renderModels();
+    },
+    
+    setPage(page) {
+      document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+      document.getElementById('nav-' + page).classList.add('active');
+      document.getElementById('page-workbench').style.display = page === 'workbench' ? 'flex' : 'none';
+      document.getElementById('page-history').style.display = page === 'history' ? 'block' : 'none';
+      if (page === 'history') this.renderHistory();
+    },
+    
+    setMode(mode) {
+      this.data.mode = mode;
+      document.getElementById('btn-naive').classList.toggle('active', mode === 'naive');
+      document.getElementById('btn-agentic').classList.toggle('active', mode === 'agentic');
+      document.getElementById('routerDiv').style.display = mode === 'agentic' ? 'block' : 'none';
+      
+      if (mode === 'naive') this.data.models = [this.data.catalog.naive[0]?.model_id].filter(Boolean);
+      else {
+        this.data.router = this.data.catalog.agentic_routers[0]?.model_id;
+        this.data.models = [this.data.catalog.agentic_synths[0]?.model_id].filter(Boolean);
+      }
+      this.renderModels();
+    },
+    
+    renderModels() {
+      const list = document.getElementById('modelList');
+      const mods = this.data.mode === 'naive' ? this.data.catalog.naive : this.data.catalog.agentic_synths;
+      
+      if (this.data.mode === 'agentic') {
+        document.getElementById('routerSelect').innerHTML = 
+          this.data.catalog.agentic_routers.map(m => `<option value="${m.model_id}">${m.label}</option>`).join('');
+      }
+      
+      list.innerHTML = mods.map(m => {
+        const sel = this.data.models.includes(m.model_id);
+        return `<div class="model-item ${sel ? 'selected' : ''}" onclick="app.toggleModel('${m.model_id}')">
+          <input type="checkbox" ${sel?'checked':''} onclick="event.stopPropagation();app.toggleModel('${m.model_id}')">
+          <span>${m.label}</span>
+          <span class="model-check">${sel?'✓':''}</span>
+        </div>`;
+      }).join('');
+      
+      document.getElementById('modelCount').textContent = `(${this.data.models.length})`;
+    },
+    
+    toggleModel(id) {
+      const i = this.data.models.indexOf(id);
+      if (i >= 0) this.data.models.splice(i, 1);
+      else this.data.models.push(id);
+      if (!this.data.models.length) this.data.models = [this.data.catalog.naive[0]?.model_id].filter(Boolean);
+      this.renderModels();
+    },
+    
+    setRouter(id) { this.data.router = id; },
+    
+    async loadTier(tier) {
+      this.data.tier = tier;
+      this.data.pairs = await fetch(`/api/chat/pairs?tier=${tier}`).then(r => r.json());
+      // Hide UA-2 pairs from dropdown (still used for matching internally)
+      const filtered = this.data.pairs.filter(p => !p.id.includes('UA-2') && p.bucket !== 'UA-2');
+      document.getElementById('pairSelect').innerHTML = '<option value="">-- Select a question --</option>' + 
+        filtered.map(p => `<option value="${p.id}">${p.id}: ${p.question.slice(0,60)}...</option>`).join('');
+    },
+    
+    selectPair(id) {
+      const p = this.data.pairs.find(x => x.id === id);
+      if (p) { 
+        this.data.selectedPair = p;
+        document.getElementById('questionInput').value = p.question;
+        this.renderResults();
+      }
+    },
+    
+    saveKey() {
+      const k = document.getElementById('apiKey').value.trim();
+      if (k) { localStorage.setItem('activity_api_key', k); this.data.apiKey = k; document.getElementById('keyStatus').textContent = '✓'; }
+    },
+    
+    async run() {
+      const q = document.getElementById('questionInput').value.trim();
+      if (!q) return alert('Enter a question');
+      if (!this.data.models.length) return alert('Select a model');
+      
+      const btn = document.getElementById('runBtn');
+      btn.disabled = true; btn.classList.add('loading'); document.getElementById('runBtnText').textContent = 'Thinking...';
+      
+      try {
+        const payload = { question: q, mode: this.data.mode, tier: this.data.tier, api_key: this.data.apiKey };
+        if (this.data.mode === 'naive') payload.models = this.data.models;
+        else { payload.router_model = this.data.router; payload.synth_models = this.data.models; }
+        
+        const r = await fetch('/api/chat/compare', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        const data = await r.json();
+        this.data.results = data.results || [];
+        this.data.groundTruth = data.ground_truth || '';
+        this.saveHistory(q, this.data.results);
+        this.renderResults();
+      } catch (e) { alert('Error: ' + e.message); }
+      finally { btn.disabled = false; btn.classList.remove('loading'); document.getElementById('runBtnText').textContent = 'Ask'; }
+    },
+    
+    renderResults() {
+      const ws = document.getElementById('workspace');
+      if (!this.data.results.length) { ws.innerHTML = '<div class="empty"><h2>No results</h2></div>'; return; }
+      
+      // Ground truth section
+      let gtHtml = '';
+      if (this.data.groundTruth) {
+        gtHtml = `<div style="border:1px solid #334155;border-radius:8px;background:#0d1c2d;padding:16px;margin-bottom:16px;">
+          <div style="font-size:10px;text-transform:uppercase;color:#6b7f99;margin-bottom:8px;font-family:monospace;">Ground Truth (Expected Answer)</div>
+          <div style="color:#d4e4fa;font-size:14px;line-height:1.6;white-space:pre-wrap;">${this.escapeHtml(this.data.groundTruth)}</div>
+        </div>`;
+      }
+      
+      ws.innerHTML = gtHtml + '<div class="results">' + this.data.results.map(r => {
+        const g = r.ragas || {};
+        const ragasError = g.error || '';
+        // Build RAGAS grid - skip context metrics if both are 0
+        let ragasHtml = '<div class="ragas-grid" style="grid-template-columns: repeat(3, 1fr);">';
+        ragasHtml += `<div class="ragas-item"><div class="ragas-label">Faithfulness</div><div class="ragas-value">${(g.faithfulness||0).toFixed(2)}</div></div>`;
+        ragasHtml += `<div class="ragas-item"><div class="ragas-label">Answer Relevancy</div><div class="ragas-value">${(g.answer_relevancy||0).toFixed(2)}</div></div>`;
+        // Only show context metrics if they have values
+        if ((g.context_precision||0) > 0 || (g.context_recall||0) > 0) {
+          ragasHtml += `<div class="ragas-item"><div class="ragas-label">Context Precision</div><div class="ragas-value">${(g.context_precision||0).toFixed(2)}</div></div>`;
+          ragasHtml += `<div class="ragas-item"><div class="ragas-label">Context Recall</div><div class="ragas-value">${(g.context_recall||0).toFixed(2)}</div></div>`;
+        }
+        ragasHtml += `<div class="ragas-item"><div class="ragas-label">Correctness</div><div class="ragas-value">${(g.answer_correctness||0).toFixed(2)}</div></div>`;
+        ragasHtml += '</div>';
+        
+        return `<div class="card">
+          <div class="card-header"><span class="card-title">${r.model_name}</span><span class="card-latency">${r.latency_s?.toFixed(1)||0}s</span></div>
+          <div class="card-body">
+            <div class="card-answer">${this.escapeHtml(r.answer||'')}</div>
+            <div class="ragas"><div class="ragas-title">RAGAS Scores</div>
+              ${ragasHtml}
+              ${ragasError ? `<div style="font-size:11px;color:#ffb4ab;margin-top:6px;">${this.escapeHtml(ragasError)}</div>` : ''}
+            </div>
+          </div>
+        </div>`;
+      }).join('') + '</div>';
+    },
+    
+    saveHistory(q, results) {
+      const e = { id: String(Date.now()), time: new Date().toISOString(), mode: this.data.mode, q, a: results.map(r => ({n:r.model_name, a:r.answer})) };
+      this.data.history.unshift(e);
+      this.data.history = this.data.history.slice(0, 100);
+      localStorage.setItem('activity_history', JSON.stringify(this.data.history));
+    },
+    
+    renderHistory() {
+      if (!this.data._expanded) this.data._expanded = {};
+      
+      let h = this.data.history;
+      const f = document.getElementById('historyFilter')?.value || 'all';
+      if (f !== 'all') {
+        const d = new Date();
+        if (f === 'today') d.setHours(0,0,0,0);
+        else if (f === 'week') d.setDate(d.getDate()-7);
+        else if (f === 'month') d.setMonth(d.getMonth()-1);
+        h = h.filter(x => new Date(x.time) >= d);
+      }
+      const s = document.getElementById('historySearch')?.value || '';
+      if (s) h = h.filter(x => x.q.toLowerCase().includes(s.toLowerCase()));
+      
+      const list = document.getElementById('historyList');
+      if (!h.length) { list.innerHTML = '<div class="history-empty">No history</div>'; return; }
+      
+      list.innerHTML = h.map(e => {
+        const isOpen = this.data._expanded[e.id];
+        const answers = e.a || [];
+        return `<div class="history-item" style="cursor:pointer;" onclick="app.toggleHistory('${e.id}')">
+          <div class="history-top">
+            <span class="history-id">${e.id.slice(-8)}</span>
+            <span class="history-time">${new Date(e.time).toLocaleString()} <span style="color:#6b7f99;margin-left:8px;">${isOpen ? '▲' : '▼'}</span></span>
+          </div>
+          <div class="history-mode">${e.mode}</div>
+          <div class="history-q">${this.escapeHtml(e.q)}</div>
+          ${isOpen ? `<div class="history-a">${answers.map(x => '<div style="margin-top:8px;padding:8px;background:#0d1c2d;border-radius:4px;border:1px solid #334155;"><div style="color:#ec4899;font-size:11px;font-weight:600;margin-bottom:4px;">' + this.escapeHtml(x.n) + '</div><div style="color:#d4e4fa;font-size:13px;line-height:1.5;white-space:pre-wrap;">' + this.escapeHtml(x.a||'') + '</div></div>').join('')}</div>` : '<div class="history-a" style="color:#6b7f99;font-size:12px;">' + answers.length + ' response(s) — click to expand</div>'}
+        </div>`;
+      }).join('');
+    },
+    
+    toggleHistory(id) {
+      if (!this.data._expanded) this.data._expanded = {};
+      this.data._expanded[id] = !this.data._expanded[id];
+      this.renderHistory();
+    },
+    
+    filterHistory() { this.renderHistory(); },
+    searchHistory() { this.renderHistory(); },
+    
+    exportHistory() {
+      const b = new Blob([JSON.stringify(this.data.history, null, 2)], {type:'application/json'});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(b);
+      a.download = 'history.json'; a.click();
+    },
+    
+    clearHistory() { if (confirm('Clear?')) { this.data.history = []; localStorage.removeItem('activity_history'); this.renderHistory(); } },
+    
+    escapeHtml(t) { return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); },
+  };
+  
+  app.init();
+  </script>
+</body>
+</html>
