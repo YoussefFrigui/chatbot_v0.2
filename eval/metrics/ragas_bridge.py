@@ -41,6 +41,7 @@ def _build_judge():
             api_key=os.getenv("OPENROUTER_API_KEY"),
             timeout=60,
             max_retries=JUDGE.max_retries,
+            max_tokens=2048,
         )
         return LangchainLLMWrapper(llm)
 
@@ -85,47 +86,50 @@ async def ragas_for_single(
     ground_truth: str,
     contexts: list[str] | None,
 ) -> dict:
-    """Run a single-row RAGAS evaluation in a thread so the API can await it.
+    """Run a single-row RAGAS evaluation.
 
-    This uses `asyncio.to_thread` to avoid blocking the event loop while
-    `ragas.evaluate` runs synchronously.
+    Only includes metrics that can be computed with the available data.
+    Context metrics require ground truth — if missing, runs faith+relevancy only.
     """
     from ragas import evaluate
     from ragas.dataset_schema import EvaluationDataset, SingleTurnSample
     from ragas.metrics import (
         faithfulness,
         answer_relevancy,
-        context_precision,
-        context_recall,
         answer_correctness,
     )
     import asyncio
+
+    has_gt = bool(ground_truth and ground_truth.strip())
+    has_ctx = bool(contexts and any(c.strip() for c in contexts if c))
+
+    metrics = [faithfulness, answer_relevancy]
+    if has_gt:
+        metrics.append(answer_correctness)
+    if has_gt and has_ctx:
+        from ragas.metrics import context_precision, context_recall
+        metrics += [context_precision, context_recall]
 
     sample = SingleTurnSample(
         user_input=question,
         retrieved_contexts=contexts or [""],
         response=answer,
-        reference=ground_truth or None,
+        reference=ground_truth if has_gt else None,
     )
     ds = EvaluationDataset(samples=[sample])
 
     def _sync_eval():
-        return evaluate(
-            ds,
-            metrics=[
-                faithfulness,
-                answer_relevancy,
-                context_precision,
-                context_recall,
-                answer_correctness,
-            ],
-            llm=_build_judge(),
-            embeddings=_build_judge_embeddings(),
-        )
+        judge = _build_judge()
+        emb = _build_judge_embeddings()
+        for m in metrics:
+            m.llm = judge
+            if hasattr(m, 'embeddings'):
+                m.embeddings = emb
+        return evaluate(ds, metrics=metrics, llm=judge, embeddings=emb)
 
     results = await asyncio.to_thread(_sync_eval)
     row = results.to_pandas().iloc[0].to_dict()
-    scores = _zero_scores()
+    scores = {"faithfulness": 0.0, "answer_relevancy": 0.0, "context_precision": 0.0, "context_recall": 0.0, "answer_correctness": 0.0}
     for key in scores:
         value = row.get(key)
         scores[key] = float(value) if value is not None and value == value else 0.0

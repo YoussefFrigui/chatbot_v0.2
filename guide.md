@@ -1,99 +1,183 @@
-# Deployment Guide — Activiity Chatbot v0.2
+# Activiity Chatbot — Deployment Guide
 
-## Requirements
+## Prerequisites
 
-- Python 3.10+
-- OpenRouter API key ([free tier](https://openrouter.ai/keys))
+| What | Why | How to get |
+|------|-----|------------|
+| Python 3.10+ | Run the app | [python.org](https://python.org) |
+| OpenRouter API key | Call AI models | [openrouter.ai/keys](https://openrouter.ai/keys) (free tier available) |
+| Docker | Run Qdrant (for agentic mode) | [docker.com](https://docker.com) |
+| Ollama | Embeddings for Qdrant ingestion | [ollama.com](https://ollama.com) |
 
-## Install & Run
+---
 
-### Option A — Environment variable (quick start)
+## 1. Quick Start (Naive mode, no Docker needed)
+
+Naive mode uses a pre-built search index. Everything works out of the box.
 
 ```powershell
-# Create virtual environment (recommended)
+# Create virtual environment
 python -m venv .venv
 .venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Set API key
+# Run the server
 $env:OPENROUTER_API_KEY = "sk-or-v1-YOUR-KEY"
-
-# Start server
 python -m uvicorn webapp.server:app --port 8788 --host 127.0.0.1
 ```
 
 Open http://localhost:8788 in your browser.
 
-### Option B — Using the .env file
+---
+
+## 2. Agentic Mode Setup (requires Qdrant + Ollama)
+
+Agentic mode routes questions to the right knowledge area before answering. It needs a vector database (Qdrant) and embeddings (Ollama).
+
+### Step 1 — Install & run Ollama
+
+Ollama runs the embedding model locally. Your data never leaves your machine.
 
 ```powershell
-# 1. Copy the example file
-copy .env.example .env
+# Download from https://ollama.com/download and install
 
-# 2. Edit .env and add your key
+# Pull the embedding model (bge-m3 works well for French)
+ollama pull bge-m3
 
-# 3. Start with the helper script
-python start.py
+# Verify it's running
+ollama list
 ```
 
-### Option C — Enter API key in the UI
+### Step 2 — Start Qdrant
 
-Start the server without setting a key, then enter it in the browser:
-
-1. `python -m uvicorn webapp.server:app --port 8788 --host 127.0.0.1`
-2. Open http://localhost:8788
-3. Paste your key into the sidebar field and click **Save**
-
-## Verify It's Running
+Qdrant stores the vector embeddings of all your documents.
 
 ```powershell
-Invoke-WebRequest -Uri http://localhost:8788/api/config
-```
-
-Expected: JSON with `"rag_available": true`
-
-## Web UI
-
-| Tab | Purpose |
-|-----|---------|
-| Workbench | Select models, enter question, run comparison |
-| History | View past conversations (search, filter, export) |
-
-### Settings
-Enter your OpenRouter API key in the sidebar and click **Save**.
-
-## Modes
-
-| Mode | Description |
-|------|-------------|
-| **Naive** | Retrieve from vector store → generate answer (works standalone) |
-| **Agentic** | ReAct router → per-UA tools → reranker → synthesis (requires Qdrant + ingested data) |
-
-## Ingestion (for Agentic mode)
-
-The naive mode uses a pre-built index (no setup needed). Agentic mode requires Qdrant with ingested data:
-
-```powershell
-# 1. Start Qdrant
 docker run -d --name activiity-qdrant -p 6333:6333 qdrant/qdrant:v1.11.0
+```
 
-# 2. Ingest documents
+Verify: `curl http://localhost:6333/collections` should return a JSON response.
+
+### Step 3 — Ingest the knowledge base into Qdrant
+
+This reads the 28 documents from `data/`, splits them into chunks, generates embeddings via Ollama, and uploads them to Qdrant.
+
+```powershell
+# Set required environment variables
 $env:OPENROUTER_API_KEY = "sk-or-v1-YOUR-KEY"
 $env:EMBED_PROVIDER = "ollama"
 $env:OLLAMA_EMBED_MODEL = "bge-m3"
 $env:QDRANT_URL = "http://localhost:6333"
+
+# Run ingestion (~30 seconds)
 python -m lib.activiity.ingest.cli
 ```
 
-This embeds the 28 documents from `data/` and uploads them to Qdrant. Only needed once.
+Expected output:
+```
+[ingest] QDRANT_URL=http://localhost:6333
+...
+"points_count": 880
+```
+
+Run it once. To re-ingest (e.g. after changing documents):
+```powershell
+python -m lib.activiity.ingest.cli --force
+```
+
+### Step 4 — Start the server
+
+```powershell
+$env:OPENROUTER_API_KEY = "sk-or-v1-YOUR-KEY"
+python -m uvicorn webapp.server:app --port 8788 --host 127.0.0.1
+```
+
+---
+
+## 3. Using Both Modes
+
+Once the server is running, open http://localhost:8788. In the sidebar:
+
+- **Naive** — works immediately, no extra setup
+- **Agentic** — works once Qdrant is running and data is ingested
+
+You can switch between them in the UI. No restart needed.
+
+---
+
+## Docker
+
+```powershell
+# Build the image
+docker build -t activiity-chatbot .
+
+# Run (naive mode only)
+docker run -d -p 8788:8788 --name activiity-chatbot `
+  -e OPENROUTER_API_KEY="sk-or-v1-YOUR-KEY" `
+  activiity-chatbot
+
+# Run with Qdrant (agentic mode)
+docker run -d --name activiity-qdrant -p 6333:6333 qdrant/qdrant:v1.11.0
+docker run -d -p 8788:8788 --name activiity-chatbot `
+  -e OPENROUTER_API_KEY="sk-or-v1-YOUR-KEY" `
+  -e QDRANT_URL="http://host.docker.internal:6333" `
+  activiity-chatbot
+```
+
+---
+
+## Settings
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENROUTER_API_KEY` | — | **Required.** OpenRouter API key |
+| `LLM_PROVIDER` | `openrouter` | `openrouter` or `ollama` |
+| `SLM_MODE` | `0` | `1` = shorter prompts for small models |
+| `LLM_MODEL` | `qwen/qwen3-8b` | Default model for generation |
+| `QDRANT_URL` | `http://localhost:6333` | Qdrant address (agentic mode) |
+| `EMBED_PROVIDER` | `ollama` | Embedding provider for Qdrant |
+| `OLLAMA_EMBED_MODEL` | `bge-m3` | Embedding model |
+
+---
+
+## How It Works
+
+```
+                    ┌─────────────────────────────┐
+                    │     Web UI (localhost:8788)   │
+                    └──────────┬──────────────────┘
+                               │ your question
+                    ┌──────────▼──────────────────┐
+                    │       Server (FastAPI)       │
+                    └──────────┬──────────────────┘
+                               │
+              ┌────────────────┼────────────────┐
+              │                │                │
+     ┌────────▼───────┐  ┌────▼───────┐  ┌────▼───────┐
+     │  Naive mode     │  │Agentic mode│  │  Chat mode  │
+     │                 │  │            │  │            │
+     │ Pre-built index │  │ Qdrant     │  │ Conversation│
+     │ + LLM call      │  │ + ReAct    │  │ memory      │
+     └─────────────────┘  └────────────┘  └────────────┘
+```
+
+**Naive** = one vector search over all documents → one LLM call. Fast, simple.
+
+**Agentic** = ReAct agent decides which knowledge area is relevant → searches only that area → generates answer. More accurate for specific questions.
+
+---
 
 ## Troubleshooting
 
-| Problem | Fix |
-|---------|-----|
-| **NotImplementedError** | Restart the server after setting the API key |
-| **401 Unauthorized** | Verify your key: `curl https://openrouter.ai/api/v1/models -H "Authorization: Bearer YOUR-KEY"` |
-| **No models work** | Check `lib/baseline` is present (for naive) or Qdrant is running (for agentic) |
-| **Slow first request** | Normal — the index is loading (~15s) |
+| Problem | Cause | Fix |
+|---------|-------|-----|
+| `401 Unauthorized` | Bad API key | Check your key: `curl https://openrouter.ai/api/v1/models -H "Authorization: Bearer YOUR-KEY"` |
+| Agentic mode says "Qdrant collection not found" | Data not ingested | Run `python -m lib.activiity.ingest.cli` |
+| "Connection refused" on Qdrant | Qdrant not running | `docker run -d -p 6333:6333 qdrant/qdrant:v1.11.0` |
+| All answers say "not found" | No relevant docs retrieved | For naive: index exists? For agentic: Qdrant ingested? |
+| Slow first request | Index loading | Normal — takes ~15s on first startup |
+| Docker build copies everything | No `.dockerignore` | Create `.dockerignore` with `.venv`, `.git`, `.qdrant_storage` |
+
+

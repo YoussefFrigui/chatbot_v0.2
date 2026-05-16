@@ -18,7 +18,7 @@ Usage:
 
 Environment variables (override defaults):
     LLM_PROVIDER=openrouter
-    OPENROUTER_API_KEY=sk-or-v1-...
+    OPENROUTER_API_KEY=YOUR-KEY-HERE
     LLM_MODEL=qwen/qwen3-14b
     SYNTH_MODEL=qwen/qwen3-8b
     SLM_MODE=1

@@ -1,0 +1,9 @@
+.venv
+.env
+.git
+.gitignore
+.qdrant_storage
+__pycache__
+*.pyc
+.DS_Store
+Thumbs.db

@@ -1,27 +1,29 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install dependencies
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Optional: install Activiity RAG backend
-ARG INSTALL_ACTIVIITY=0
-RUN if [ "$INSTALL_ACTIVIITY" = "1" ]; then \
-        pip install --no-cache-dir \
-            llama-index-core>=0.14 \
-            llama-index-llms-openrouter>=0.5 \
-            llama-index-embeddings-openai>=0.6 \
-            llama-index-vector-stores-qdrant>=0.10 \
-            qdrant-client>=1.17; \
-    fi
+# Copy entire application
+COPY . .
 
-COPY chatbot/ ./chatbot/
+# Remove dev-only files
+RUN rm -rf .venv .git .gitignore .qdrant_storage __pycache__ .pytest_cache && \
+    find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 
+# Expose port
 EXPOSE 8788
 
-HEALTHCHECK --interval=30s --timeout=5s \
-    CMD python -c "import httpx; r = httpx.get('http://localhost:8788/api/health'); exit(0 if r.status_code==200 else 1)" || exit 1
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s \
+    CMD python -c "import httpx; r = httpx.get('http://localhost:8788/api/health',timeout=5); exit(0 if r.status_code==200 else 1)" || exit 1
 
-CMD ["uvicorn", "chatbot.api:app", "--host", "0.0.0.0", "--port", "8788"]
+# Start the web UI server (not the minimal API)
+CMD ["uvicorn", "webapp.server:app", "--host", "0.0.0.0", "--port", "8788"]

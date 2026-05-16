@@ -61,12 +61,18 @@ class Cfg:
         "Question : {query_str}\nRéponse :"
     )
     slm_qa_prompt_fr: str = (
-        "Contexte: {context_str}\n"
-        "Avant toute recherche, si la requête est uniquement une salutation ou un message bref sans demande (ex. 'bonjour', 'salut', 'merci'), réponds : « Bonjour. Posez une question de management ou sélectionnez une Fiche UA pour que je puisse aider. »\n"
-        "Question: {query_str}\n"
-        "Réponds en français avec SEULEMENT les faits du contexte.\n"
-        "Si pas de réponse → 'Je ne trouve pas cette information.'\n"
-        "MAX: 3 phrases."
+        "Tu es un assistant RAG. Tu réponds UNIQUEMENT à partir du contexte ci-dessous.\n"
+        "---------------------\n"
+        "{context_str}\n"
+        "---------------------\n"
+        "RÈGLES:\n"
+        "- Si la requête est une salutation → réponds « Bonjour. Posez une question de management. »\n"
+        "- Sinon, réponds UNIQUEMENT à partir des faits du contexte (pas de connaissances générales)\n"
+        "- Si le contexte ne contient PAS la réponse → « Je ne trouve pas cette information dans la base Activiity. »\n"
+        "- Si le contexte mentionne un nombre (ex: « 3 principes », « 4 sources »), reproduis-le EXACTEMENT avec chaque item listé\n"
+        "- Pas de phrase d'introduction (« D'après le contexte… »), pas de commentaire, pas de conseil ajouté\n"
+        "- MAX: 3 phrases. Concis et factuel.\n\n"
+        "Question: {query_str}\nRéponse:"
     )
 
 

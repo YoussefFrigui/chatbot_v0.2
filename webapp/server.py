@@ -58,7 +58,7 @@ class _StandaloneCfg:
     llm_provider = "openrouter"
     openrouter_model = "qwen/qwen3-8b"
     synth_model = "qwen/qwen3-8b"
-    slm_mode = True
+    slm_mode = False
     max_iterations = 2
     use_reranker = False
     embed_provider = "ollama"
@@ -105,9 +105,11 @@ STATIC = ROOT / "webapp" / "static"
 STATIC.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(
-    title="Activiity Chatbot",
-    description="Activiity RAG workbench - compare naive vs agentic models",
+    title="Activiity Chatbot v0.2",
+    description="Conversational RAG agent over the Activiity knowledge base. Compare SLMs with live RAGAS evaluation.",
     version="0.2.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 # Lazy-loaded RAG service (loads index on first use, not at import)
@@ -121,6 +123,17 @@ def _get_naive_rag():
         except Exception:
             _naive_rag = "__unavailable__"
     return _naive_rag if _naive_rag != "__unavailable__" else None
+
+_agentic_rag: object | None = None
+def _get_agentic_rag():
+    global _agentic_rag
+    if _agentic_rag is None:
+        try:
+            from lib.activiity.rag.service import AgenticRagService
+            _agentic_rag = AgenticRagService()
+        except Exception:
+            _agentic_rag = "__unavailable__"
+    return _agentic_rag if _agentic_rag != "__unavailable__" else None
 
 try:
     app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
@@ -464,33 +477,52 @@ async def compare_models(req: Request):
 
         raw_results = await asyncio.gather(*[_run_naive(m) for m in model_ids])
     else:
-        # Agentic: direct API call (retrieval handled by agentic pipeline)
-        async def _run_one(model_id: str) -> dict:
-            model = find_model(mode, model_id)
-            label = model.label if model else model_id
-            if router_model:
-                router = find_model(mode, router_model)
-                label = f"{router.label} → {label}" if router else label
+        # Agentic: ReActAgent (with direct-API synthesizer) or simple fallback
+        _agentic_svc = _get_agentic_rag()
+
+        if _agentic_svc is None:
+            # Fallback: simple_agentic (no ReAct, just classify + retrieve)
             try:
-                result = await _call_openrouter(model_id, f"Question: {question}", api_key)
-                return {"model_id": model_id, "model_name": label, "mode": mode, **result, "tools_called": [], "retrieved_sources": [], "retrieved_chunks": [], "iterations": 1}
-            except Exception as e:
-                return {"model_id": model_id, "model_name": label, "mode": mode, "answer": f"[error] {type(e).__name__}: {e}", "latency_s": 0, "tokens_in": 0, "tokens_out": 0, "tools_called": [], "retrieved_sources": [], "retrieved_chunks": [], "iterations": 0}
-
-        raw_results = await asyncio.gather(*[_run_one(m) for m in model_ids])
-
-    ragas_results = await asyncio.gather(*[
-        _compute_ragas(
-            question,
-            item.get("answer", ""),
-            ground_truth,
-            list(item.get("retrieved_chunks", [])),
-            item.get("model_id", ""),
-        )
-        for item in raw_results
-    ]) if raw_results else []
-
-    ragas_by_model = {r["model_id"]: r for r in ragas_results if r}
+                from lib.activiity.rag.simple_agentic import run_agentic
+            except ImportError:
+                async def _err(m: str) -> dict:
+                    model = find_model(mode, m); label = model.label if model else m
+                    if router_model:
+                        r = find_model(mode, router_model); label = f"{r.label} → {label}" if r else label
+                    return {"model_id": m, "model_name": label, "mode": mode, "answer": "[error] Agentic mode unavailable (Qdrant not running or not installed).", "latency_s": 0, "tokens_in": 0, "tokens_out": 0, "tools_called": [], "retrieved_sources": [], "retrieved_chunks": [], "iterations": 0}
+                raw_results = await asyncio.gather(*[_err(m) for m in model_ids])
+            else:
+                async def _run_simple(synth_id: str) -> dict:
+                    model = find_model(mode, synth_id); label = model.label if model else synth_id
+                    if router_model:
+                        r = find_model(mode, router_model); label = f"{r.label} → {label}" if r else label
+                    try:
+                        result = await run_agentic(router_model or "qwen/qwen3-8b", synth_id, question, api_key)
+                        return {"model_id": synth_id, "model_name": label, "mode": mode, "answer": result.answer, "latency_s": result.latency_s, "tokens_in": result.tokens_in, "tokens_out": result.tokens_out, "tools_called": result.tools_called, "retrieved_sources": result.sources, "retrieved_chunks": result.chunks, "iterations": result.iterations}
+                    except Exception as e:
+                        return {"model_id": synth_id, "model_name": label, "mode": mode, "answer": f"[error] {type(e).__name__}: {e}", "latency_s": 0, "tokens_in": 0, "tokens_out": 0, "tools_called": [], "retrieved_sources": [], "retrieved_chunks": [], "iterations": 0}
+                raw_results = await asyncio.gather(*[_run_simple(m) for m in model_ids])
+        else:
+            # Use ReActAgent
+            async def _run_react(synth_id: str) -> dict:
+                model = find_model(mode, synth_id); label = model.label if model else synth_id
+                if router_model:
+                    r = find_model(mode, router_model); label = f"{r.label} → {label}" if r else label
+                try:
+                    result = await _agentic_svc.achat_with_trace(question)
+                    nodes = list(getattr(result, "retrieved_nodes", []) or [])
+                    sources = []
+                    chunks = []
+                    for n in nodes:
+                        meta = getattr(n, "metadata", None) or {}
+                        src = meta.get("source_path", "")
+                        if src: sources.append(src)
+                        text = getattr(n, "text", None) or ""
+                        if text: chunks.append(text)
+                    return {"model_id": synth_id, "model_name": label, "mode": mode, "answer": result.answer, "latency_s": result.ttft_s or 0, "tokens_in": result.tokens_in, "tokens_out": result.tokens_out, "tools_called": list(result.tools_called), "retrieved_sources": sources, "retrieved_chunks": chunks, "iterations": result.iterations}
+                except Exception as e:
+                    return {"model_id": synth_id, "model_name": label, "mode": mode, "answer": f"[error] {type(e).__name__}: {e}", "latency_s": 0, "tokens_in": 0, "tokens_out": 0, "tools_called": [], "retrieved_sources": [], "retrieved_chunks": [], "iterations": 0}
+            raw_results = await asyncio.gather(*[_run_react(m) for m in model_ids])
 
     results: list[ModelScoreResponse] = []
     for item in raw_results:
@@ -508,7 +540,7 @@ async def compare_models(req: Request):
             latency_s=float(item.get("latency_s", 0) or 0),
             tokens_in=int(item.get("tokens_in", 0) or 0),
             tokens_out=int(item.get("tokens_out", 0) or 0),
-            ragas=ragas_by_model.get(model_id, {}),
+            ragas={},
         ))
 
     return CompareResponse(
@@ -588,6 +620,46 @@ async def chat_ask(req: Request):
             latency_s=time.perf_counter() - t0,
             error=str(e),
         )
+
+
+@app.post("/api/chat/ask/stream")
+async def ask_stream(req: Request):
+    """Stream a single model answer directly from OpenRouter (no ChatService)."""
+    body = await req.json()
+    model_id = body.get("model") or body.get("model_id", "")
+    question = body.get("question", "")
+    api_key = body.get("api_key") or os.getenv("OPENROUTER_API_KEY", "")
+    if not api_key or not question or not model_id:
+        return JSONResponse({"error": "model, question, and api_key required"}, status_code=400)
+
+    async def gen():
+        yield f"data: {json.dumps({'type': 'meta', 'model': model_id})}\n\n"
+        try:
+            async with httpx.AsyncClient(timeout=180) as c:
+                async with c.stream("POST", OR_API,
+                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                    json={"model": model_id, "messages": [{"role": "user", "content": question}], "max_tokens": 1024, "temperature": 0.2, "stream": True},
+                ) as resp:
+                    if resp.status_code != 200:
+                        yield f"data: {json.dumps({'type': 'error', 'text': f'HTTP {resp.status_code}'})}\n\n"
+                        return
+                    async for line in resp.aiter_lines():
+                        if line.startswith("data: "):
+                            payload = line[6:].strip()
+                            if payload == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(payload)
+                                delta = chunk.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                                if delta:
+                                    yield f"data: {json.dumps({'type': 'token', 'text': delta})}\n\n"
+                            except json.JSONDecodeError:
+                                pass
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'text': str(e)})}\n\n"
+        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 
 @app.post("/api/chat/stream")

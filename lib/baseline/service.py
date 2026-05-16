@@ -33,21 +33,25 @@ class NaiveResult:
 
 
 def _build_prompt(question: str, context: str) -> str:
-    """Build a simple French QA prompt with context."""
+    """Build a French QA prompt. Matches the agentic prompts from defaults_fr.py."""
+    from llama_index.core.prompts import PromptTemplate
     if CFG.slm_mode:
-        return (
-            f"Contexte: {context}\n"
-            f"Avant toute recherche, si la requête est uniquement une salutation ou un message bref sans demande (ex. 'bonjour', 'salut', 'merci'), réponds : « Bonjour. Posez une question de management ou sélectionnez une Fiche UA pour que je puisse aider. »\n"
-            f"Question: {question}\n"
-            f"Réponds en français avec SEULEMENT les faits du contexte.\n"
-            f"Si pas de réponse → « Je ne trouve pas cette information. »\n"
-            f"MAX: 3 phrases."
-        )
+        from lib.activiity.prompts.defaults_fr import SLM_QA_FR
+        tmpl = PromptTemplate(SLM_QA_FR)
+        return tmpl.format(context_str=context, query_str=question)
+    from lib.activiity.prompts.defaults_fr import QA_FR
+    tmpl = PromptTemplate(QA_FR)
+    return tmpl.format(context_str=context, query_str=question)
     return (
         f"Contexte ci-dessous :\n---------------------\n{context}\n"
-        f"---------------------\nAvant toute recherche, si la requête est uniquement une salutation ou un message bref sans demande (ex. 'bonjour', 'salut', 'merci'), réponds : « Bonjour. Posez une question de management ou sélectionnez une Fiche UA pour que je puisse aider. »\n"
-        f"En te fondant UNIQUEMENT sur ce contexte (et non sur tes connaissances générales), réponds à la question en français, de façon structurée et concise. Si l'information n'est pas présente dans le contexte, dis explicitement : « Je ne trouve pas cette information dans la base Activiity. »\n"
-        f"Question : {question}\nRÃ©ponse :"
+        f"---------------------\n"
+        f"RÈGLES:\n"
+        f"- Si la requête est une salutation → réponds « Bonjour. Posez une question de management. »\n"
+        f"- Sinon, réponds UNIQUEMENT à partir des faits du contexte (pas de connaissances générales)\n"
+        f"- Si le contexte ne contient PAS la réponse → « Je ne trouve pas cette information dans la base Activiity. »\n"
+        f"- Si le contexte mentionne un nombre, reproduis-le EXACTEMENT avec chaque item listé\n"
+        f"- Concis et factuel.\n\n"
+        f"Question : {question}\nRéponse :"
     )
 
 

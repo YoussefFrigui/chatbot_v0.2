@@ -24,8 +24,8 @@ NAIVE_MODELS: list[DemoModel] = [
     DemoModel("qwen/qwen3-14b", "Qwen3 14B", "naive"),
     DemoModel("nvidia/nemotron-3-nano-30b-a3b", "NVIDIA Nemotron Nano 30B", "naive"),
     DemoModel("ibm-granite/granite-4.1-8b", "IBM Granite 8B", "naive"),
-    DemoModel("mistralai/ministral-8b-instruct-2501", "Mistral Ministral 8B", "naive"),
-    DemoModel("mistralai/mistral-7b-instruct-2407", "Mistral 7B v3", "naive"),
+    DemoModel("mistralai/ministral-8b-2512", "Mistral Ministral 3 8B", "naive"),
+    DemoModel("mistralai/mistral-7b-instruct-v0.1", "Mistral 7B v0.1", "naive"),
 ]
 
 
@@ -44,8 +44,8 @@ AGENTIC_SYNTHS: list[DemoModel] = [
     # Best performers ranked first
     DemoModel("qwen/qwen3-8b", "Qwen3 8B (Synth)", "agentic"),
     DemoModel("qwen/qwen3-14b", "Qwen3 14B (Synth)", "agentic"),
-    DemoModel("mistralai/ministral-8b-instruct-2501", "Mistral Ministral 8B (Synth)", "agentic"),
-    DemoModel("mistralai/mistral-7b-instruct-2407", "Mistral 7B v3 (Synth)", "agentic"),
+    DemoModel("mistralai/ministral-8b-2512", "Mistral Ministral 3 8B (Synth)", "agentic"),
+    DemoModel("mistralai/mistral-7b-instruct-v0.1", "Mistral 7B v0.1 (Synth)", "agentic"),
     DemoModel("nvidia/nemotron-3-nano-30b-a3b", "NVIDIA Nemotron Nano (Synth)", "agentic"),
     DemoModel("ibm-granite/granite-4.1-8b", "IBM Granite 8B (Synth)", "agentic"),
 ]

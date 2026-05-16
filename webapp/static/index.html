@@ -150,6 +150,8 @@
     .ragas-item { background: var(--surface); padding: 8px; border-radius: 4px; }
     .ragas-label { font-size: 10px; color: var(--on-surface-variant); text-transform: uppercase; font-family: 'JetBrains Mono', monospace; }
     .ragas-value { font-size: 14px; font-weight: 600; color: var(--on-surface); font-family: 'JetBrains Mono', monospace; }
+    @keyframes ragaPulse{0%{transform:translateX(-100%)}100%{transform:translateX(400%)}}
+    .raga-loading{animation:ragaPulse 1.2s ease-in-out infinite}
     
     .input-area { padding: 16px 20px; background: var(--surface); border-top: 1px solid var(--outline); display: flex; gap: 12px; }
     .input-area textarea { flex: 1; padding: 12px 16px; background: var(--surface-container-low); border: 1px solid var(--outline); border-radius: 4px; color: var(--on-surface); resize: none; min-height: 60px; font-size: 14px; }
@@ -202,7 +204,7 @@
     <aside class="sidebar">
       <div class="section">
         <div class="section-title">API Key</div>
-        <input type="password" class="api-key" id="apiKey" placeholder="sk-or-v1-...">
+        <input type="password" class="api-key" id="apiKey" placeholder="sk-or-v1-YOUR-KEY">
         <button class="btn-save" onclick="app.saveKey()">Save</button>
         <span id="keyStatus" style="font-size:11px;color:#6b7f99;margin-left:8px;"></span>
       </div>
@@ -365,23 +367,167 @@
       const q = document.getElementById('questionInput').value.trim();
       if (!q) return alert('Enter a question');
       if (!this.data.models.length) return alert('Select a model');
-      
+
       const btn = document.getElementById('runBtn');
-      btn.disabled = true; btn.classList.add('loading'); document.getElementById('runBtnText').textContent = 'Thinking...';
-      
-      try {
-        const payload = { question: q, mode: this.data.mode, tier: this.data.tier, api_key: this.data.apiKey };
-        if (this.data.mode === 'naive') payload.models = this.data.models;
-        else { payload.router_model = this.data.router; payload.synth_models = this.data.models; }
-        
-        const r = await fetch('/api/chat/compare', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-        const data = await r.json();
-        this.data.results = data.results || [];
-        this.data.groundTruth = data.ground_truth || '';
-        this.saveHistory(q, this.data.results);
+      btn.disabled = true; btn.classList.add('loading');
+      document.getElementById('runBtnText').textContent = 'Thinking...';
+
+      // For agentic or multi-model: stream each via ask/stream endpoint
+      const allModels = this.data.mode === 'naive' ? this.data.models : this.data.mode === 'agentic' ? this.data.models : [];
+      const cat = this.data.mode === 'naive' ? this.data.catalog.naive : this.data.catalog.agentic_synths;
+
+      // Create placeholder results immediately — one card per model
+      this.data.results = allModels.map(mid => {
+        const m = cat.find(x => x.model_id === mid);
+        return { model_id: mid, model_name: m ? m.label : mid, answer: '…', latency_s: 0, tools_called: [], retrieved_sources: [], retrieved_chunks: [], iterations: 0, ragas: {}, _streaming: true };
+      });
+      this.data.groundTruth = '';
+      this.data.ragaLoading = {};
+      this.renderResults();
+
+      // Agentic mode: show placeholders, fill in when compare returns
+      if (this.data.mode === 'agentic') {
+        (async () => {
+          try {
+            const p = { question: q, mode: 'agentic', tier: this.data.tier, api_key: this.data.apiKey, router_model: this.data.router, synth_models: this.data.models };
+            const r = await fetch('/api/chat/compare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) });
+            const d = await r.json();
+            this.data.groundTruth = d.ground_truth || '';
+            const newResults = d.results || [];
+            // Merge: update placeholders with real answers
+            newResults.forEach(nr => {
+              const existing = this.data.results.find(x => x.model_id === nr.model_id);
+              if (existing) { Object.assign(existing, nr); existing._streaming = false; }
+              else { nr._streaming = false; this.data.results.push(nr); }
+            });
+            this.saveHistory(q, this.data.results);
+            this.renderResults();
+            this._loadRagas(q);
+          } catch (e) { alert('Agentic error: ' + e.message); }
+          finally { btn.disabled = false; btn.classList.remove('loading'); document.getElementById('runBtnText').textContent = 'Ask'; }
+        })();
+        return;
+      }
+
+      // Load ground truth from selected pair if available
+      if (this.data.selectedPair?.ground_truth) this.data.groundTruth = this.data.selectedPair.ground_truth;
+
+      // Naive mode: stream each model independently
+      let completed = 0;
+      const total = allModels.length;
+
+      let ragasDone = 0;
+      allModels.forEach((mid, idx) => {
+        let answer = '';
+        const startTime = performance.now();
+
+        const finishModel = () => {
+          // Update latency
+          const r = this.data.results[idx];
+          if (r) r.latency_s = (performance.now() - startTime) / 1000;
+          this.saveHistory(q, this.data.results);
+          this.renderResults();
+          // Start RAGAS immediately for this model (don't wait for others)
+          if (r) this._ragaSingle(q, r.model_name, idx);
+          completed++;
+          if (completed === total) {
+            btn.disabled = false; btn.classList.remove('loading'); document.getElementById('runBtnText').textContent = 'Ask';
+          }
+        };
+
+        fetch('/api/chat/ask/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: mid, question: q, api_key: this.data.apiKey })
+        }).then(async (resp) => {
+          if (!resp.ok) {
+            try { const err = await resp.json(); throw new Error(err.detail || err.error || `HTTP ${resp.status}`); }
+            catch(e) { throw new Error(`HTTP ${resp.status}`); }
+          }
+          const reader = resp.body.getReader();
+          const decoder = new TextDecoder();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const text = decoder.decode(value);
+            for (const line of text.split('\n')) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const msg = JSON.parse(line.slice(6));
+                  if (msg.type === 'token') {
+                    answer += msg.text;
+                    if (this.data.results[idx]) { this.data.results[idx].answer = answer; this.data.results[idx].latency_s = (performance.now() - startTime) / 1000; }
+                    if (!this._renderPending) {
+                      this._renderPending = true;
+                      requestAnimationFrame(() => { this._renderPending = false; this.renderResults(); });
+                    }
+                  } else if (msg.type === 'error') {
+                    if (this.data.results[idx]) { this.data.results[idx].answer = '[error] ' + msg.text; this.data.results[idx]._streaming = false; }
+                  }
+                } catch (_) {}
+              }
+            }
+          }
+          if (this.data.results[idx]) this.data.results[idx]._streaming = false;
+          finishModel();
+        }).catch((e) => {
+          if (this.data.results[idx]) { this.data.results[idx].answer = '[error] ' + (e.message||'Request failed'); this.data.results[idx]._streaming = false; this.data.results[idx].latency_s = (performance.now() - startTime) / 1000; }
+          finishModel();
+        });
+      });
+    },
+
+    _ragaSingle(q, modelName, idx) {
+      if (!this.data.results[idx]) return;
+      this.data.ragaLoading = this.data.ragaLoading || {};
+      this.data.ragaLoading[idx] = true;
+      this.renderResults();
+      const t0 = Date.now();
+      const res = this.data.results[idx];
+      fetch('/api/chat/ragas', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q, answer: res.answer, ground_truth: this.data.groundTruth || '', contexts: res.retrieved_chunks || [], model_id: res.model_id })
+      }).then(r => r.json()).then(rag => {
+        setTimeout(() => {
+          if (this.data.results[idx]) {
+            this.data.results[idx].ragas = rag;
+            const hEntry = this.data.history.find(h => h.q === q && h.a.find(a => a.n === modelName));
+            if (hEntry) { const aEntry = hEntry.a.find(a => a.n === modelName); if (aEntry) aEntry.ragas = rag; localStorage.setItem('activity_history', JSON.stringify(this.data.history)); }
+          }
+          this.data.ragaLoading[idx] = false;
+          this.renderResults();
+        }, Math.max(0, 800 - (Date.now() - t0)));
+      }).catch(() => {
+        setTimeout(() => { this.data.ragaLoading[idx] = false; this.renderResults(); }, Math.max(0, 800 - (Date.now() - t0)));
+      });
+    },
+
+    _loadRagas(q) {
+      this.data.ragaLoading = {};
+      this.data.results.forEach((res, i) => {
+        this.data.ragaLoading[i] = true;
         this.renderResults();
-      } catch (e) { alert('Error: ' + e.message); }
-      finally { btn.disabled = false; btn.classList.remove('loading'); document.getElementById('runBtnText').textContent = 'Ask'; }
+        const t0 = Date.now();
+        fetch('/api/chat/ragas', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: q, answer: res.answer, ground_truth: this.data.groundTruth || '', contexts: res.retrieved_chunks || [], model_id: res.model_id })
+        }).then(r => r.json()).then(rag => {
+          // Enforce minimum 800ms loading display so bars don't flash
+          const elapsed = Date.now() - t0;
+          const delay = Math.max(0, 800 - elapsed);
+          setTimeout(() => {
+            if (this.data.results[i]) {
+              this.data.results[i].ragas = rag;
+              const hEntry = this.data.history.find(h => h.q === q && h.a.find(a => a.n === res.model_name));
+              if (hEntry) { const aEntry = hEntry.a.find(a => a.n === res.model_name); if (aEntry) aEntry.ragas = rag; localStorage.setItem('activity_history', JSON.stringify(this.data.history)); }
+            }
+            this.data.ragaLoading[i] = false;
+            this.renderResults();
+          }, delay);
+        }).catch(() => {
+          setTimeout(() => { this.data.ragaLoading[i] = false; this.renderResults(); }, Math.max(0, 800 - (Date.now() - t0)));
+        });
+      });
     },
     
     renderResults() {
@@ -397,28 +543,40 @@
         </div>`;
       }
       
-      ws.innerHTML = gtHtml + '<div class="results">' + this.data.results.map(r => {
+      ws.innerHTML = gtHtml + '<div class="results">' + this.data.results.map((r, idx) => {
         const g = r.ragas || {};
-        const ragasError = g.error || '';
-        // Build RAGAS grid - skip context metrics if both are 0
-        let ragasHtml = '<div class="ragas-grid" style="grid-template-columns: repeat(3, 1fr);">';
-        ragasHtml += `<div class="ragas-item"><div class="ragas-label">Faithfulness</div><div class="ragas-value">${(g.faithfulness||0).toFixed(2)}</div></div>`;
-        ragasHtml += `<div class="ragas-item"><div class="ragas-label">Answer Relevancy</div><div class="ragas-value">${(g.answer_relevancy||0).toFixed(2)}</div></div>`;
-        // Only show context metrics if they have values
-        if ((g.context_precision||0) > 0 || (g.context_recall||0) > 0) {
-          ragasHtml += `<div class="ragas-item"><div class="ragas-label">Context Precision</div><div class="ragas-value">${(g.context_precision||0).toFixed(2)}</div></div>`;
-          ragasHtml += `<div class="ragas-item"><div class="ragas-label">Context Recall</div><div class="ragas-value">${(g.context_recall||0).toFixed(2)}</div></div>`;
-        }
-        ragasHtml += `<div class="ragas-item"><div class="ragas-label">Correctness</div><div class="ragas-value">${(g.answer_correctness||0).toFixed(2)}</div></div>`;
-        ragasHtml += '</div>';
+        const loading = this.data.ragaLoading && this.data.ragaLoading[idx];
         
+        let ragasHtml;
+        if (loading) {
+          // Animated loading bars
+          ragasHtml = '<div style="padding:8px 0;">' + 
+            ['Faithfulness','Answer Relevancy','Correctness'].map(l => 
+              `<div style="margin-bottom:8px;"><div style="font-size:9px;color:#a68992;font-family:monospace;margin-bottom:2px;">${l}</div>
+               <div style="height:4px;background:#0d1c2d;border-radius:2px;overflow:hidden;">
+                 <div class="raga-loading" style="height:100%;width:30%;background:linear-gradient(90deg,#ffb0cd,#a68992);border-radius:2px;"></div>
+               </div></div>`
+            ).join('') + '<div style="font-size:9px;color:#a68992;font-family:monospace;">Evaluating…</div></div>';
+        } else {
+          ragasHtml = '<div class="ragas-grid" style="grid-template-columns: repeat(3, 1fr);">';
+          ragasHtml += `<div class="ragas-item"><div class="ragas-label">Faithfulness</div><div class="ragas-value">${(g.faithfulness||0).toFixed(2)}</div></div>`;
+          ragasHtml += `<div class="ragas-item"><div class="ragas-label">Answer Relevancy</div><div class="ragas-value">${(g.answer_relevancy||0).toFixed(2)}</div></div>`;
+          if ((g.context_precision||0) > 0 || (g.context_recall||0) > 0) {
+            ragasHtml += `<div class="ragas-item"><div class="ragas-label">Context Precision</div><div class="ragas-value">${(g.context_precision||0).toFixed(2)}</div></div>`;
+            ragasHtml += `<div class="ragas-item"><div class="ragas-label">Context Recall</div><div class="ragas-value">${(g.context_recall||0).toFixed(2)}</div></div>`;
+          }
+          ragasHtml += `<div class="ragas-item"><div class="ragas-label">Correctness</div><div class="ragas-value">${(g.answer_correctness||0).toFixed(2)}</div></div>`;
+          ragasHtml += '</div>';
+        }
+        
+        const ragasError = g.error || '';
         return `<div class="card">
           <div class="card-header"><span class="card-title">${r.model_name}</span><span class="card-latency">${r.latency_s?.toFixed(1)||0}s</span></div>
           <div class="card-body">
             <div class="card-answer">${this.escapeHtml(r.answer||'')}</div>
             <div class="ragas"><div class="ragas-title">RAGAS Scores</div>
               ${ragasHtml}
-              ${ragasError ? `<div style="font-size:11px;color:#ffb4ab;margin-top:6px;">${this.escapeHtml(ragasError)}</div>` : ''}
+              ${ragasError ? '<div style="font-size:10px;color:#ffb4ab;margin-top:6px;">' + this.escapeHtml(ragasError) + '</div>' : ''}
             </div>
           </div>
         </div>`;
@@ -426,7 +584,7 @@
     },
     
     saveHistory(q, results) {
-      const e = { id: String(Date.now()), time: new Date().toISOString(), mode: this.data.mode, q, a: results.map(r => ({n:r.model_name, a:r.answer})) };
+      const e = { id: String(Date.now()), time: new Date().toISOString(), mode: this.data.mode, q, a: results.map(r => ({ n: r.model_name, a: r.answer, ragas: r.ragas || null })) };
       this.data.history.unshift(e);
       this.data.history = this.data.history.slice(0, 100);
       localStorage.setItem('activity_history', JSON.stringify(this.data.history));
@@ -460,7 +618,21 @@
           </div>
           <div class="history-mode">${e.mode}</div>
           <div class="history-q">${this.escapeHtml(e.q)}</div>
-          ${isOpen ? `<div class="history-a">${answers.map(x => '<div style="margin-top:8px;padding:8px;background:#0d1c2d;border-radius:4px;border:1px solid #334155;"><div style="color:#ec4899;font-size:11px;font-weight:600;margin-bottom:4px;">' + this.escapeHtml(x.n) + '</div><div style="color:#d4e4fa;font-size:13px;line-height:1.5;white-space:pre-wrap;">' + this.escapeHtml(x.a||'') + '</div></div>').join('')}</div>` : '<div class="history-a" style="color:#6b7f99;font-size:12px;">' + answers.length + ' response(s) — click to expand</div>'}
+          ${isOpen ? `<div class="history-a">${answers.map(x => {
+            const rg = x.ragas || {};
+            const hasRagas = rg.faithfulness !== undefined || rg.answer_relevancy !== undefined;
+            return '<div style="margin-top:8px;padding:8px;background:#0d1c2d;border-radius:4px;border:1px solid #334155;">'
+              + '<div style="color:#ec4899;font-size:11px;font-weight:600;margin-bottom:4px;">' + this.escapeHtml(x.n) + '</div>'
+              + '<div style="color:#d4e4fa;font-size:12px;line-height:1.5;white-space:pre-wrap;">' + this.escapeHtml(x.a||'') + '</div>'
+              + (hasRagas ? '<div style="margin-top:6px;padding:6px;background:#051424;border-radius:4px;display:flex;gap:10px;flex-wrap:wrap;font-size:10px;font-family:monospace;">'
+                + '<span>Faithfulness: <b>' + (rg.faithfulness||0).toFixed(2) + '</b></span>'
+                + '<span>Relevancy: <b>' + (rg.answer_relevancy||0).toFixed(2) + '</b></span>'
+                + '<span>Precision: <b>' + (rg.context_precision||0).toFixed(2) + '</b></span>'
+                + '<span>Recall: <b>' + (rg.context_recall||0).toFixed(2) + '</b></span>'
+                + '<span>Correctness: <b>' + (rg.answer_correctness||0).toFixed(2) + '</b></span>'
+                + '</div>' : '')
+              + '</div>';
+          }).join('')}</div>` : '<div class="history-a" style="color:#6b7f99;font-size:12px;">' + answers.length + ' response(s) — click to expand</div>'}
         </div>`;
       }).join('');
     },

@@ -47,7 +47,7 @@ CHAT_CONFIG = {
     "ollama_embed_model": "bge-m3",
 
     # RAG / agent
-    "slm_mode": True,
+    "slm_mode": False,
     "max_iterations": 2,
     "use_reranker": False,
     "reranker_model": "BAAI/bge-reranker-v2-m3",
