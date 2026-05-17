@@ -11,9 +11,6 @@ __pycache__/
 .vscode/
 .idea/
 
-# Qdrant storage
-.qdrant_storage/
-
 # OS
 Thumbs.db
 .DS_Store

@@ -71,7 +71,7 @@ class Cfg:
         "- Si le contexte ne contient PAS la réponse → « Je ne trouve pas cette information dans la base Activiity. »\n"
         "- Si le contexte mentionne un nombre (ex: « 3 principes », « 4 sources »), reproduis-le EXACTEMENT avec chaque item listé\n"
         "- Pas de phrase d'introduction (« D'après le contexte… »), pas de commentaire, pas de conseil ajouté\n"
-        "- MAX: 3 phrases. Concis et factuel.\n\n"
+        "- Réponds de façon naturelle et complète. Pas de limite artificielle de phrases.\n\n"
         "Question: {query_str}\nRéponse:"
     )
 

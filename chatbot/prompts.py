@@ -17,14 +17,20 @@ SLM_SYSTEM_FR = (
     "2) Réponds ONLY avec le contexte récupéré.\n"
     "3) Si pas de réponse → 'Je ne trouve pas cette information.'\n"
     "4) Cite l'UA source.\n"
+    "5) N'interprète jamais les UA comme des acronymes génériques et n'utilise aucune connaissance externe.\n"
     "MAX: 3 phrases, 100 mots."
 )
 
 SLM_QA_FR = """Contexte: {context_str}
 
+Les UA-1 à UA-10 sont des fiches internes Activiity. N'interprète jamais
+'UA-1' ou 'UA-10' comme un acronyme externe, et n'ajoute aucune
+connaissance générale ou définition hors contexte.
+
 Question: {query_str}
 Réponds en français avec SEULEMENT les faits du contexte.
 Si pas de réponse → 'Je ne trouve pas cette information.'
+N'utilise jamais de connaissance externe et ne réinterprète pas les UA comme des acronymes génériques.
 MAX: 3 phrases."""
 
 SLM_REFINE_FR = (
@@ -59,6 +65,12 @@ UA_TITLES = {
     "UA-10": "Compétences commerciales",
 }
 
+STRICT_CONTEXT_GUARD_FR = (
+    "Les UA-1 à UA-10 sont des fiches internes Activiity. "
+    "N'interprète jamais 'UA-1' ou 'UA-10' comme un acronyme externe, "
+    "et n'ajoute aucune connaissance générale ou définition hors contexte."
+)
+
 
 def tool_desc_ua(ua_id: str) -> str:
     title = UA_TITLES.get(ua_id, "")
@@ -77,7 +89,7 @@ def make_chat_system_prompt(history_text: str = "", max_tokens: int = 200) -> st
 
     Includes chat history so the LLM maintains context across turns.
     """
-    base = SLM_SYSTEM_FR.rstrip()
+    base = (SLM_SYSTEM_FR.rstrip() + "\n" + STRICT_CONTEXT_GUARD_FR)
 
     if history_text:
         hist_block = (
@@ -97,11 +109,16 @@ CHAT_QA_FR = """Contexte :
 Historique :
 {history_text}
 
+Les UA-1 à UA-10 sont des fiches internes Activiity. N'interprète jamais
+'UA-1' ou 'UA-10' comme un acronyme externe, et n'ajoute aucune
+connaissance générale ou définition hors contexte.
+
 Question de l'utilisateur : {query_str}
 
 Réponds en français, de façon conversationnelle mais précise, en t'appuyant
 UNIQUEMENT sur le contexte récupéré. Si tu n'as pas la réponse →
 "Je ne trouve pas cette information dans la base Activiity."
+N'utilise jamais de connaissance externe et ne réinterprète pas les UA comme des acronymes génériques.
 MAX: 3 phrases."""
 
 
@@ -110,7 +127,7 @@ CHAT_REFINE_FR = (
     "Réponse actuelle: {existing_answer}\n"
     "Nouveau contexte: {context_msg}\n"
     "Complète ou corrige la réponse avec les faits nouveaux UNIQUEMENT. "
-    "Sinon garde la réponse existante. MAX: 3 phrases."
+    "Sinon garde la réponse existante. N'utilise jamais de connaissance externe. MAX: 3 phrases."
 )
 
 CHAT_REFUSAL_FR = (

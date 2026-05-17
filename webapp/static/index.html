@@ -412,69 +412,28 @@
       // Load ground truth from selected pair if available
       if (this.data.selectedPair?.ground_truth) this.data.groundTruth = this.data.selectedPair.ground_truth;
 
-      // Naive mode: stream each model independently
-      let completed = 0;
-      const total = allModels.length;
-
-      let ragasDone = 0;
-      allModels.forEach((mid, idx) => {
-        let answer = '';
-        const startTime = performance.now();
-
-        const finishModel = () => {
-          // Update latency
-          const r = this.data.results[idx];
-          if (r) r.latency_s = (performance.now() - startTime) / 1000;
+      // Naive mode: use the compare endpoint so the retrieved answer and
+      // the selected reference ground truth are rendered together.
+      (async () => {
+        try {
+          const p = { question: q, mode: 'naive', tier: this.data.tier, api_key: this.data.apiKey, models: allModels };
+          const r = await fetch('/api/chat/compare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) });
+          const d = await r.json();
+          this.data.groundTruth = d.ground_truth || this.data.groundTruth || '';
+          const newResults = d.results || [];
+          newResults.forEach(nr => {
+            const existing = this.data.results.find(x => x.model_id === nr.model_id);
+            if (existing) { Object.assign(existing, nr); existing._streaming = false; }
+            else { nr._streaming = false; this.data.results.push(nr); }
+          });
           this.saveHistory(q, this.data.results);
           this.renderResults();
-          // Start RAGAS immediately for this model (don't wait for others)
-          if (r) this._ragaSingle(q, r.model_name, idx);
-          completed++;
-          if (completed === total) {
-            btn.disabled = false; btn.classList.remove('loading'); document.getElementById('runBtnText').textContent = 'Ask';
-          }
-        };
-
-        fetch('/api/chat/ask/stream', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: mid, question: q, api_key: this.data.apiKey })
-        }).then(async (resp) => {
-          if (!resp.ok) {
-            try { const err = await resp.json(); throw new Error(err.detail || err.error || `HTTP ${resp.status}`); }
-            catch(e) { throw new Error(`HTTP ${resp.status}`); }
-          }
-          const reader = resp.body.getReader();
-          const decoder = new TextDecoder();
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            const text = decoder.decode(value);
-            for (const line of text.split('\n')) {
-              if (line.startsWith('data: ')) {
-                try {
-                  const msg = JSON.parse(line.slice(6));
-                  if (msg.type === 'token') {
-                    answer += msg.text;
-                    if (this.data.results[idx]) { this.data.results[idx].answer = answer; this.data.results[idx].latency_s = (performance.now() - startTime) / 1000; }
-                    if (!this._renderPending) {
-                      this._renderPending = true;
-                      requestAnimationFrame(() => { this._renderPending = false; this.renderResults(); });
-                    }
-                  } else if (msg.type === 'error') {
-                    if (this.data.results[idx]) { this.data.results[idx].answer = '[error] ' + msg.text; this.data.results[idx]._streaming = false; }
-                  }
-                } catch (_) {}
-              }
-            }
-          }
-          if (this.data.results[idx]) this.data.results[idx]._streaming = false;
-          finishModel();
-        }).catch((e) => {
-          if (this.data.results[idx]) { this.data.results[idx].answer = '[error] ' + (e.message||'Request failed'); this.data.results[idx]._streaming = false; this.data.results[idx].latency_s = (performance.now() - startTime) / 1000; }
-          finishModel();
-        });
-      });
+          this._loadRagas(q);
+        } catch (e) { alert('Naive error: ' + e.message); }
+        finally {
+          btn.disabled = false; btn.classList.remove('loading'); document.getElementById('runBtnText').textContent = 'Ask';
+        }
+      })();
     },
 
     _ragaSingle(q, modelName, idx) {

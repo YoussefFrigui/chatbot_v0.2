@@ -240,7 +240,10 @@ class AgenticRagService:
                                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
                                 json={
                                     "model": CFG.synth_model,
-                                    "messages": [{"role": "user", "content": prompt}],
+                                    "messages": [
+                                        {"role": "system", "content": self._system_prompt},
+                                        {"role": "user", "content": prompt},
+                                    ],
                                     "max_tokens": 512,
                                     "temperature": 0.1,
                                 },

@@ -36,23 +36,12 @@ def _build_prompt(question: str, context: str) -> str:
     """Build a French QA prompt. Matches the agentic prompts from defaults_fr.py."""
     from llama_index.core.prompts import PromptTemplate
     if CFG.slm_mode:
-        from lib.activiity.prompts.defaults_fr import SLM_QA_FR
+        from lib.activiity.prompts.defaults_fr import SLM_QA_FR, SLM_SYSTEM_FR
         tmpl = PromptTemplate(SLM_QA_FR)
-        return tmpl.format(context_str=context, query_str=question)
-    from lib.activiity.prompts.defaults_fr import QA_FR
+        return SLM_SYSTEM_FR, tmpl.format(context_str=context, query_str=question)
+    from lib.activiity.prompts.defaults_fr import QA_FR, SYSTEM_FR
     tmpl = PromptTemplate(QA_FR)
-    return tmpl.format(context_str=context, query_str=question)
-    return (
-        f"Contexte ci-dessous :\n---------------------\n{context}\n"
-        f"---------------------\n"
-        f"RÈGLES:\n"
-        f"- Si la requête est une salutation → réponds « Bonjour. Posez une question de management. »\n"
-        f"- Sinon, réponds UNIQUEMENT à partir des faits du contexte (pas de connaissances générales)\n"
-        f"- Si le contexte ne contient PAS la réponse → « Je ne trouve pas cette information dans la base Activiity. »\n"
-        f"- Si le contexte mentionne un nombre, reproduis-le EXACTEMENT avec chaque item listé\n"
-        f"- Concis et factuel.\n\n"
-        f"Question : {question}\nRéponse :"
-    )
+    return SYSTEM_FR, tmpl.format(context_str=context, query_str=question)
 
 
 class NaiveRagService:
@@ -112,7 +101,7 @@ class NaiveRagService:
                 context_parts.append(text)
         context = "\n\n".join(context_parts[:3])  # top 3 chunks
 
-        prompt = _build_prompt(question, context)
+        system_prompt, prompt = _build_prompt(question, context)
 
         # Call OpenRouter directly — avoids llama-index LLM stack bugs
         api_key = os.environ.get("OPENROUTER_API_KEY", "")
@@ -139,7 +128,10 @@ class NaiveRagService:
                     },
                     json={
                         "model": model_override or CFG.openrouter_model,
-                        "messages": [{"role": "user", "content": prompt}],
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": prompt},
+                        ],
                         "max_tokens": 1024,
                         "temperature": CFG.llm_temperature,
                     },
