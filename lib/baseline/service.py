@@ -12,8 +12,10 @@ import httpx
 from llama_index.core.callbacks import CallbackManager, TokenCountingHandler
 from llama_index.core import Settings as LISettings
 
+from chatbot.config import CFG as CHAT_CFG
 from lib.baseline.config import CFG
 from lib.baseline.index import build_or_load
+from lib.activiity.prompts.defaults_fr import select_prompt_pack
 
 
 OR_API = "https://openrouter.ai/api/v1/chat/completions"
@@ -35,13 +37,9 @@ class NaiveResult:
 def _build_prompt(question: str, context: str) -> str:
     """Build a French QA prompt. Matches the agentic prompts from defaults_fr.py."""
     from llama_index.core.prompts import PromptTemplate
-    if CFG.slm_mode:
-        from lib.activiity.prompts.defaults_fr import SLM_QA_FR, SLM_SYSTEM_FR
-        tmpl = PromptTemplate(SLM_QA_FR)
-        return SLM_SYSTEM_FR, tmpl.format(context_str=context, query_str=question)
-    from lib.activiity.prompts.defaults_fr import QA_FR, SYSTEM_FR
-    tmpl = PromptTemplate(QA_FR)
-    return SYSTEM_FR, tmpl.format(context_str=context, query_str=question)
+    system_prompt, qa_prompt, _ = select_prompt_pack(CHAT_CFG.slm_mode)
+    tmpl = PromptTemplate(qa_prompt)
+    return system_prompt, tmpl.format(context_str=context, query_str=question)
 
 
 class NaiveRagService:

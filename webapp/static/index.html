@@ -143,12 +143,77 @@
     .card-latency { color: var(--on-surface-variant); font-size: 12px; font-family: 'JetBrains Mono', monospace; }
     .card-body { padding: 16px; }
     .card-answer { font-size: 13px; color: var(--on-surface); line-height: 1.6; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; }
+    .card-answer.streaming::after { content: " |"; color: var(--primary); animation: caretBlink 1s step-end infinite; }
+    @keyframes caretBlink { 50% { opacity: 0; } }
+    .answer-skeleton { display: flex; flex-direction: column; gap: 8px; }
+    .skeleton-line { height: 10px; background: linear-gradient(90deg, rgba(255,255,255,0.08), rgba(255,255,255,0.2), rgba(255,255,255,0.08)); border-radius: 6px; background-size: 200% 100%; animation: shimmer 1.2s ease-in-out infinite; }
+    .skeleton-line.short { width: 50%; }
+    .skeleton-line.medium { width: 70%; }
+    .skeleton-line.long { width: 90%; }
+    @keyframes shimmer { 0% { background-position: 0% 0; } 100% { background-position: 200% 0; } }
+
+    .status-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; margin-bottom: 12px; background: var(--surface-container); border: 1px solid var(--outline); border-radius: 8px; gap: 12px; }
+    .status-left { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--on-surface); }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 0 4px rgba(236,72,153,0.2); animation: pulse 1.4s ease-out infinite; }
+    .status-sub { color: var(--on-surface-variant); font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+    .status-meter { flex: 1; height: 2px; background: var(--surface); border-radius: 999px; overflow: hidden; }
+    .status-meter span { display: block; height: 100%; width: 40%; background: linear-gradient(90deg, transparent, var(--primary), transparent); animation: meter 1.2s linear infinite; }
+    @keyframes pulse { 0% { transform: scale(1); opacity: 0.6; } 70% { transform: scale(1.6); opacity: 0; } 100% { opacity: 0; } }
+    @keyframes meter { 0% { transform: translateX(-120%); } 100% { transform: translateX(220%); } }
+
+    .card-state { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; padding: 2px 6px; border: 1px solid var(--outline); border-radius: 999px; color: var(--on-surface-variant); font-family: 'JetBrains Mono', monospace; }
+    .card-state.streaming { color: var(--primary); border-color: var(--primary); background: rgba(236,72,153,0.1); }
+
+    .helper-text { display: block; margin-top: 6px; font-size: 11px; color: var(--on-surface-variant); }
+    .ragas-actions { display: flex; gap: 8px; margin-top: 8px; }
+    .ragas-btn { padding: 6px 10px; background: var(--surface-container-high); border: 1px solid var(--outline); border-radius: 4px; color: var(--on-surface); cursor: pointer; font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+    .ragas-btn:hover { border-color: var(--primary); color: var(--primary); }
     
     .ragas { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--outline); }
     .ragas-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--on-surface-variant); margin-bottom: 8px; font-family: 'JetBrains Mono', monospace; }
     .ragas-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
     .ragas-item { background: var(--surface); padding: 8px; border-radius: 4px; }
     .ragas-label { font-size: 10px; color: var(--on-surface-variant); text-transform: uppercase; font-family: 'JetBrains Mono', monospace; }
+    .ragas-label[data-tip] { position: relative; cursor: help; }
+    .ragas-label[data-tip]::after {
+      content: attr(data-tip);
+      position: absolute;
+      left: 0;
+      top: 140%;
+      min-width: 220px;
+      max-width: 260px;
+      padding: 8px 10px;
+      background: #0d1c2d;
+      color: var(--on-surface);
+      border: 1px solid var(--outline);
+      border-radius: 6px;
+      font-size: 11px;
+      line-height: 1.4;
+      text-transform: none;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-6px);
+      transition: opacity 0.15s ease, transform 0.15s ease;
+      z-index: 20;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+    }
+    .ragas-label[data-tip]::before {
+      content: "";
+      position: absolute;
+      left: 10px;
+      top: 120%;
+      border: 6px solid transparent;
+      border-bottom-color: var(--outline);
+      opacity: 0;
+      transform: translateY(-6px);
+      transition: opacity 0.15s ease, transform 0.15s ease;
+      z-index: 21;
+    }
+    .ragas-label[data-tip]:hover::after,
+    .ragas-label[data-tip]:hover::before {
+      opacity: 1;
+      transform: translateY(0);
+    }
     .ragas-value { font-size: 14px; font-weight: 600; color: var(--on-surface); font-family: 'JetBrains Mono', monospace; }
     @keyframes ragaPulse{0%{transform:translateX(-100%)}100%{transform:translateX(400%)}}
     .raga-loading{animation:ragaPulse 1.2s ease-in-out infinite}
@@ -238,6 +303,14 @@
           <option value="">-- Select --</option>
         </select>
       </div>
+
+      <div class="section">
+        <div class="section-title">RAGAS</div>
+        <div class="ragas-actions">
+          <button class="btn-save" id="runRagasBtn" onclick="app.runRagasAll()">Run scores now</button>
+        </div>
+        <span class="helper-text" id="ragasHint">RAGAS is available for reference questions only.</span>
+      </div>
     </aside>
 
     <main class="main">
@@ -276,6 +349,17 @@
       apiKey: localStorage.getItem('activity_api_key') || '',
       catalog: { naive: [], agentic_routers: [], agentic_synths: [] },
       history: JSON.parse(localStorage.getItem('activity_history') || '[]'),
+      lastQuestion: '',
+      lastIsReference: false,
+      isRunning: false,
+      runStart: 0,
+      runElapsed: 0,
+      _streamTimers: {},
+      _renderQueued: false,
+      _runTicker: null,
+      _ragasQueue: [],
+      _ragasActive: 0,
+      ragasConcurrency: 1,
     },
     
     async init() {
@@ -284,6 +368,8 @@
       await this.loadTier('reference');
       this.data.models = [cfg.model_defaults.naive];
       if (this.data.apiKey) document.getElementById('apiKey').value = this.data.apiKey;
+      localStorage.removeItem('activity_auto_ragas');
+      this.updateRagasControls();
       this.renderModels();
     },
     
@@ -362,24 +448,196 @@
       const k = document.getElementById('apiKey').value.trim();
       if (k) { localStorage.setItem('activity_api_key', k); this.data.apiKey = k; document.getElementById('keyStatus').textContent = '✓'; }
     },
+
+    runRagasAll() {
+      if (!this.data.lastQuestion || !this.data.results.length) {
+        alert('Run a question first');
+        return;
+      }
+      if (!this.data.lastIsReference) {
+        alert('RAGAS is available for reference questions only');
+        return;
+      }
+      this._loadRagas(this.data.lastQuestion);
+    },
+
+    runRagasFor(idx) {
+      const res = this.data.results[idx];
+      if (!res || !this.data.lastQuestion) {
+        alert('Run a question first');
+        return;
+      }
+      if (!this.data.lastIsReference) return;
+      if (this.data.ragaLoading && this.data.ragaLoading[idx]) return;
+      const g = res.ragas || {};
+      const hasScores = g.faithfulness !== undefined || g.answer_relevancy !== undefined || g.answer_correctness !== undefined || g.error;
+      if (hasScores) return;
+      this._enqueueRagas(idx, res.model_name);
+    },
+
+    scheduleRender() {
+      if (this.data._renderQueued) return;
+      this.data._renderQueued = true;
+      requestAnimationFrame(() => {
+        this.data._renderQueued = false;
+        this.renderResults();
+      });
+    },
+
+    startRunTicker() {
+      if (this.data._runTicker) clearInterval(this.data._runTicker);
+      this.data.runStart = Date.now();
+      this.data.runElapsed = 0;
+      this.data._runTicker = setInterval(() => {
+        if (!this.data.isRunning) {
+          clearInterval(this.data._runTicker);
+          this.data._runTicker = null;
+          return;
+        }
+        this.data.runElapsed = Date.now() - this.data.runStart;
+        this.scheduleRender();
+      }, 250);
+    },
+
+    stopRunTicker() {
+      if (this.data._runTicker) {
+        clearInterval(this.data._runTicker);
+        this.data._runTicker = null;
+      }
+    },
+
+    resetStreaming() {
+      Object.values(this.data._streamTimers || {}).forEach(t => clearInterval(t));
+      this.data._streamTimers = {};
+    },
+
+    normalizeQuestion(text) {
+      return String(text || '').trim().replace(/\s+/g, ' ');
+    },
+
+    isReferenceQuestion(q) {
+      if (!this.data.selectedPair) return false;
+      if (this.data.tier !== 'reference') return false;
+      return this.normalizeQuestion(this.data.selectedPair.question) === this.normalizeQuestion(q);
+    },
+
+    updateRagasControls() {
+      const btn = document.getElementById('runRagasBtn');
+      const hint = document.getElementById('ragasHint');
+      if (!btn || !hint) return;
+      const canRun = this.data.lastIsReference && this.data.results.length;
+      btn.style.display = canRun ? 'inline-flex' : 'none';
+      hint.textContent = canRun
+        ? 'Compute per card to keep the UI snappy.'
+        : 'RAGAS is available for reference questions only.';
+    },
+
+    formatElapsed(ms) {
+      const s = Math.max(0, ms || 0) / 1000;
+      return s.toFixed(1);
+    },
+
+    answerSkeletonHtml() {
+      return '<div class="answer-skeleton">'
+        + '<div class="skeleton-line long"></div>'
+        + '<div class="skeleton-line medium"></div>'
+        + '<div class="skeleton-line short"></div>'
+        + '</div>';
+    },
+
+    _updateAnswerDom(idx, text, streaming) {
+      const el = document.getElementById('answer-' + idx);
+      if (!el) return;
+      if (streaming && !text) {
+        el.innerHTML = this.answerSkeletonHtml();
+        return;
+      }
+      const cls = streaming ? 'card-answer streaming' : 'card-answer';
+      el.innerHTML = `<div class="${cls}">${this.escapeHtml(text)}</div>`;
+    },
+
+    startAnswerStream(res, idx) {
+      if (!res) return;
+      const fullText = String(res.answer || '').trim();
+      const key = res.model_id || res.model_name || String(idx);
+      if (this.data._streamTimers[key]) {
+        clearInterval(this.data._streamTimers[key]);
+        delete this.data._streamTimers[key];
+      }
+      if (!fullText) {
+        res._displayAnswer = '';
+        res._streaming = false;
+        return;
+      }
+      res._displayAnswer = '';
+      res._streaming = true;
+      const tokens = fullText.split(/(\s+)/);
+      const total = tokens.length;
+      const step = Math.max(1, Math.round(total / 160));
+      let cursor = 0;
+      this._updateAnswerDom(idx, res._displayAnswer, true);
+      this.data._streamTimers[key] = setInterval(() => {
+        cursor = Math.min(total, cursor + step);
+        res._displayAnswer = tokens.slice(0, cursor).join('');
+        this._updateAnswerDom(idx, res._displayAnswer, true);
+        if (cursor >= total) {
+          res._streaming = false;
+          clearInterval(this.data._streamTimers[key]);
+          delete this.data._streamTimers[key];
+          this._updateAnswerDom(idx, res._displayAnswer, false);
+          this.renderResults();
+        }
+      }, 35);
+    },
+
+    _enqueueRagas(idx, modelName) {
+      if (!this.data._ragasQueue) this.data._ragasQueue = [];
+      this.data._ragasQueue.push({ idx, modelName });
+      this._pumpRagas();
+    },
+
+    _pumpRagas() {
+      const q = this.data.lastQuestion;
+      if (!q) return;
+      while (this.data._ragasActive < this.data.ragasConcurrency && this.data._ragasQueue.length) {
+        const item = this.data._ragasQueue.shift();
+        if (!item) return;
+        this.data._ragasActive += 1;
+        this._ragaSingle(q, item.modelName, item.idx).finally(() => {
+          this.data._ragasActive -= 1;
+          this._pumpRagas();
+        });
+      }
+    },
     
     async run() {
       const q = document.getElementById('questionInput').value.trim();
       if (!q) return alert('Enter a question');
       if (!this.data.models.length) return alert('Select a model');
 
+      this.data.lastQuestion = q;
+      this.data.lastIsReference = this.isReferenceQuestion(q);
+      if (!this.data.lastIsReference) this.data.groundTruth = '';
+      this.updateRagasControls();
+      this.data.isRunning = true;
+      this.startRunTicker();
+      this.resetStreaming();
+      this.data.ragaLoading = {};
+      this.data._ragasQueue = [];
+      this.data._ragasActive = 0;
+
       const btn = document.getElementById('runBtn');
       btn.disabled = true; btn.classList.add('loading');
       document.getElementById('runBtnText').textContent = 'Thinking...';
 
-      // For agentic or multi-model: stream each via ask/stream endpoint
+      // Build one card per selected model for streaming UI updates.
       const allModels = this.data.mode === 'naive' ? this.data.models : this.data.mode === 'agentic' ? this.data.models : [];
       const cat = this.data.mode === 'naive' ? this.data.catalog.naive : this.data.catalog.agentic_synths;
 
       // Create placeholder results immediately — one card per model
       this.data.results = allModels.map(mid => {
         const m = cat.find(x => x.model_id === mid);
-        return { model_id: mid, model_name: m ? m.label : mid, answer: '…', latency_s: 0, tools_called: [], retrieved_sources: [], retrieved_chunks: [], iterations: 0, ragas: {}, _streaming: true };
+        return { model_id: mid, model_name: m ? m.label : mid, answer: '', latency_s: 0, tools_called: [], retrieved_sources: [], retrieved_chunks: [], iterations: 0, ragas: {}, _streaming: true, _displayAnswer: '' };
       });
       this.data.groundTruth = '';
       this.data.ragaLoading = {};
@@ -397,20 +655,29 @@
             // Merge: update placeholders with real answers
             newResults.forEach(nr => {
               const existing = this.data.results.find(x => x.model_id === nr.model_id);
-              if (existing) { Object.assign(existing, nr); existing._streaming = false; }
-              else { nr._streaming = false; this.data.results.push(nr); }
+              if (existing) { Object.assign(existing, nr); }
+              else { nr._displayAnswer = ''; nr._streaming = true; this.data.results.push(nr); }
             });
             this.saveHistory(q, this.data.results);
             this.renderResults();
-            this._loadRagas(q);
+            this.data.results.forEach((res, idx) => {
+              if (res.answer) this.startAnswerStream(res, idx);
+            });
+            this.updateRagasControls();
           } catch (e) { alert('Agentic error: ' + e.message); }
-          finally { btn.disabled = false; btn.classList.remove('loading'); document.getElementById('runBtnText').textContent = 'Ask'; }
+          finally {
+            this.data.isRunning = false;
+            this.stopRunTicker();
+            btn.disabled = false; btn.classList.remove('loading'); document.getElementById('runBtnText').textContent = 'Ask';
+          }
         })();
         return;
       }
 
-      // Load ground truth from selected pair if available
-      if (this.data.selectedPair?.ground_truth) this.data.groundTruth = this.data.selectedPair.ground_truth;
+      // Load ground truth only for reference questions
+      if (this.data.lastIsReference && this.data.selectedPair?.ground_truth) {
+        this.data.groundTruth = this.data.selectedPair.ground_truth;
+      }
 
       // Naive mode: use the compare endpoint so the retrieved answer and
       // the selected reference ground truth are rendered together.
@@ -423,75 +690,89 @@
           const newResults = d.results || [];
           newResults.forEach(nr => {
             const existing = this.data.results.find(x => x.model_id === nr.model_id);
-            if (existing) { Object.assign(existing, nr); existing._streaming = false; }
-            else { nr._streaming = false; this.data.results.push(nr); }
+            if (existing) { Object.assign(existing, nr); }
+            else { nr._displayAnswer = ''; nr._streaming = true; this.data.results.push(nr); }
           });
           this.saveHistory(q, this.data.results);
           this.renderResults();
-          this._loadRagas(q);
+          this.data.results.forEach((res, idx) => {
+            if (res.answer) this.startAnswerStream(res, idx);
+          });
+          this.updateRagasControls();
         } catch (e) { alert('Naive error: ' + e.message); }
         finally {
+          this.data.isRunning = false;
+          this.stopRunTicker();
           btn.disabled = false; btn.classList.remove('loading'); document.getElementById('runBtnText').textContent = 'Ask';
         }
       })();
     },
 
-    _ragaSingle(q, modelName, idx) {
+    async _ragaSingle(q, modelName, idx) {
       if (!this.data.results[idx]) return;
       this.data.ragaLoading = this.data.ragaLoading || {};
       this.data.ragaLoading[idx] = true;
-      this.renderResults();
+      this.scheduleRender();
       const t0 = Date.now();
       const res = this.data.results[idx];
-      fetch('/api/chat/ragas', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: q, answer: res.answer, ground_truth: this.data.groundTruth || '', contexts: res.retrieved_chunks || [], model_id: res.model_id })
-      }).then(r => r.json()).then(rag => {
-        setTimeout(() => {
-          if (this.data.results[idx]) {
-            this.data.results[idx].ragas = rag;
-            const hEntry = this.data.history.find(h => h.q === q && h.a.find(a => a.n === modelName));
-            if (hEntry) { const aEntry = hEntry.a.find(a => a.n === modelName); if (aEntry) aEntry.ragas = rag; localStorage.setItem('activity_history', JSON.stringify(this.data.history)); }
+      try {
+        const r = await fetch('/api/chat/ragas', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: q, answer: res.answer, ground_truth: this.data.groundTruth || '', contexts: res.retrieved_chunks || [], model_id: res.model_id })
+        });
+        const rag = await r.json();
+        const elapsed = Date.now() - t0;
+        const delay = Math.max(0, 800 - elapsed);
+        if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+        if (this.data.results[idx]) {
+          this.data.results[idx].ragas = rag;
+          const hEntry = this.data.history.find(h => h.q === q && h.a.find(a => a.n === modelName));
+          if (hEntry) {
+            const aEntry = hEntry.a.find(a => a.n === modelName);
+            if (aEntry) aEntry.ragas = rag;
+            localStorage.setItem('activity_history', JSON.stringify(this.data.history));
           }
-          this.data.ragaLoading[idx] = false;
-          this.renderResults();
-        }, Math.max(0, 800 - (Date.now() - t0)));
-      }).catch(() => {
-        setTimeout(() => { this.data.ragaLoading[idx] = false; this.renderResults(); }, Math.max(0, 800 - (Date.now() - t0)));
-      });
+        }
+      } catch (e) {
+        const elapsed = Date.now() - t0;
+        const delay = Math.max(0, 800 - elapsed);
+        if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+      } finally {
+        if (this.data.ragaLoading) this.data.ragaLoading[idx] = false;
+        this.scheduleRender();
+      }
     },
 
     _loadRagas(q) {
+      if (!q) return;
+      this.data.lastQuestion = q;
       this.data.ragaLoading = {};
+      this.data._ragasQueue = [];
+      this.data._ragasActive = 0;
       this.data.results.forEach((res, i) => {
-        this.data.ragaLoading[i] = true;
-        this.renderResults();
-        const t0 = Date.now();
-        fetch('/api/chat/ragas', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question: q, answer: res.answer, ground_truth: this.data.groundTruth || '', contexts: res.retrieved_chunks || [], model_id: res.model_id })
-        }).then(r => r.json()).then(rag => {
-          // Enforce minimum 800ms loading display so bars don't flash
-          const elapsed = Date.now() - t0;
-          const delay = Math.max(0, 800 - elapsed);
-          setTimeout(() => {
-            if (this.data.results[i]) {
-              this.data.results[i].ragas = rag;
-              const hEntry = this.data.history.find(h => h.q === q && h.a.find(a => a.n === res.model_name));
-              if (hEntry) { const aEntry = hEntry.a.find(a => a.n === res.model_name); if (aEntry) aEntry.ragas = rag; localStorage.setItem('activity_history', JSON.stringify(this.data.history)); }
-            }
-            this.data.ragaLoading[i] = false;
-            this.renderResults();
-          }, delay);
-        }).catch(() => {
-          setTimeout(() => { this.data.ragaLoading[i] = false; this.renderResults(); }, Math.max(0, 800 - (Date.now() - t0)));
-        });
+        if (!res) return;
+        const g = res.ragas || {};
+        const hasScores = g.faithfulness !== undefined || g.answer_relevancy !== undefined || g.answer_correctness !== undefined || g.error;
+        if (hasScores) return;
+        this._enqueueRagas(i, res.model_name);
       });
     },
     
     renderResults() {
       const ws = document.getElementById('workspace');
       if (!this.data.results.length) { ws.innerHTML = '<div class="empty"><h2>No results</h2></div>'; return; }
+
+      const streamingCount = this.data.results.filter(r => r._streaming).length;
+      const isBusy = this.data.isRunning || streamingCount > 0;
+      let statusHtml = '';
+      if (isBusy) {
+        const statusLabel = this.data.isRunning ? 'Generating responses' : 'Streaming answers';
+        const statusSub = this.data.isRunning ? `Elapsed ${this.formatElapsed(this.data.runElapsed)}s` : `${streamingCount} active`;
+        statusHtml = `<div class="status-bar">
+          <div class="status-left"><span class="status-dot"></span><span>${statusLabel}</span><span class="status-sub">${statusSub}</span></div>
+          <div class="status-meter"><span></span></div>
+        </div>`;
+      }
       
       // Ground truth section
       let gtHtml = '';
@@ -502,9 +783,24 @@
         </div>`;
       }
       
-      ws.innerHTML = gtHtml + '<div class="results">' + this.data.results.map((r, idx) => {
+      ws.innerHTML = statusHtml + gtHtml + '<div class="results">' + this.data.results.map((r, idx) => {
         const g = r.ragas || {};
         const loading = this.data.ragaLoading && this.data.ragaLoading[idx];
+        const hasScores = g.faithfulness !== undefined || g.answer_relevancy !== undefined || g.answer_correctness !== undefined || g.error;
+        const ragasActive = (this.data._ragasActive || 0) > 0 || (this.data._ragasQueue && this.data._ragasQueue.length);
+        const showRagasDefs = this.data.lastIsReference && hasScores;
+        const ragasDefs = {
+          faithfulness: "Measures factual consistency between the response and retrieved context. Computed as the share of response claims supported by context; higher means fewer hallucinated claims.",
+          answer_relevancy: "Measures how well the response addresses the user question (intent), not factual accuracy. Uses question variants and similarity; higher means more on-topic.",
+          context_precision: "Evaluates whether retrieved chunks are useful and ranked above irrelevant ones. Higher means top results are more relevant.",
+          context_recall: "Measures how many reference claims are covered by the retrieved context. Requires a reference answer; higher means fewer missing facts.",
+          answer_correctness: "Compares the response to the reference ground truth using claim overlap (precision/recall/F1). Higher means closer to the expected answer.",
+        };
+        const labelHtml = (label, key) => {
+          if (!showRagasDefs) return `<div class="ragas-label">${label}</div>`;
+          const tip = this.escapeHtmlAttr(ragasDefs[key] || "");
+          return `<div class="ragas-label" data-tip="${tip}">${label}</div>`;
+        };
         
         let ragasHtml;
         if (loading) {
@@ -516,23 +812,45 @@
                  <div class="raga-loading" style="height:100%;width:30%;background:linear-gradient(90deg,#ffb0cd,#a68992);border-radius:2px;"></div>
                </div></div>`
             ).join('') + '<div style="font-size:9px;color:#a68992;font-family:monospace;">Evaluating…</div></div>';
+        } else if (!hasScores && !ragasActive) {
+          if (this.data.lastIsReference) {
+            ragasHtml = '<div style="font-size:10px;color:#a6b5c8;margin-bottom:6px;">RAGAS paused. Compute when ready.</div>'
+              + `<button class="ragas-btn" onclick="app.runRagasFor(${idx})">Compute RAGAS</button>`;
+          } else {
+            ragasHtml = '<div style="font-size:10px;color:#a6b5c8;">RAGAS available for reference questions only.</div>';
+          }
+        } else if (!hasScores) {
+          ragasHtml = '<div style="font-size:10px;color:#a6b5c8;">Queued for evaluation...</div>';
         } else {
           ragasHtml = '<div class="ragas-grid" style="grid-template-columns: repeat(3, 1fr);">';
-          ragasHtml += `<div class="ragas-item"><div class="ragas-label">Faithfulness</div><div class="ragas-value">${(g.faithfulness||0).toFixed(2)}</div></div>`;
-          ragasHtml += `<div class="ragas-item"><div class="ragas-label">Answer Relevancy</div><div class="ragas-value">${(g.answer_relevancy||0).toFixed(2)}</div></div>`;
+          ragasHtml += `<div class="ragas-item">${labelHtml('Faithfulness','faithfulness')}<div class="ragas-value">${(g.faithfulness||0).toFixed(2)}</div></div>`;
+          ragasHtml += `<div class="ragas-item">${labelHtml('Answer Relevancy','answer_relevancy')}<div class="ragas-value">${(g.answer_relevancy||0).toFixed(2)}</div></div>`;
           if ((g.context_precision||0) > 0 || (g.context_recall||0) > 0) {
-            ragasHtml += `<div class="ragas-item"><div class="ragas-label">Context Precision</div><div class="ragas-value">${(g.context_precision||0).toFixed(2)}</div></div>`;
-            ragasHtml += `<div class="ragas-item"><div class="ragas-label">Context Recall</div><div class="ragas-value">${(g.context_recall||0).toFixed(2)}</div></div>`;
+            ragasHtml += `<div class="ragas-item">${labelHtml('Context Precision','context_precision')}<div class="ragas-value">${(g.context_precision||0).toFixed(2)}</div></div>`;
+            ragasHtml += `<div class="ragas-item">${labelHtml('Context Recall','context_recall')}<div class="ragas-value">${(g.context_recall||0).toFixed(2)}</div></div>`;
           }
-          ragasHtml += `<div class="ragas-item"><div class="ragas-label">Correctness</div><div class="ragas-value">${(g.answer_correctness||0).toFixed(2)}</div></div>`;
+          ragasHtml += `<div class="ragas-item">${labelHtml('Correctness','answer_correctness')}<div class="ragas-value">${(g.answer_correctness||0).toFixed(2)}</div></div>`;
           ragasHtml += '</div>';
         }
         
         const ragasError = g.error || '';
+        const displayAnswer = (r._displayAnswer !== undefined ? r._displayAnswer : r.answer) || '';
+        const answerHtml = (r._streaming && !displayAnswer)
+          ? this.answerSkeletonHtml()
+          : `<div class="card-answer ${r._streaming ? 'streaming' : ''}">${this.escapeHtml(displayAnswer)}</div>`;
+        const latency = r.latency_s ? `${r.latency_s.toFixed(1)}s` : (r._streaming ? '--' : '0.0s');
+        const stateLabel = r._streaming ? 'Streaming' : 'Final';
+        const stateClass = r._streaming ? 'streaming' : '';
         return `<div class="card">
-          <div class="card-header"><span class="card-title">${r.model_name}</span><span class="card-latency">${r.latency_s?.toFixed(1)||0}s</span></div>
+          <div class="card-header">
+            <span class="card-title">${r.model_name}</span>
+            <span style="display:flex;align-items:center;gap:8px;">
+              <span class="card-state ${stateClass}">${stateLabel}</span>
+              <span class="card-latency">${latency}</span>
+            </span>
+          </div>
           <div class="card-body">
-            <div class="card-answer">${this.escapeHtml(r.answer||'')}</div>
+            <div id="answer-${idx}">${answerHtml}</div>
             <div class="ragas"><div class="ragas-title">RAGAS Scores</div>
               ${ragasHtml}
               ${ragasError ? '<div style="font-size:10px;color:#ffb4ab;margin-top:6px;">' + this.escapeHtml(ragasError) + '</div>' : ''}
@@ -540,11 +858,17 @@
           </div>
         </div>`;
       }).join('') + '</div>';
+      this.updateRagasControls();
     },
     
     saveHistory(q, results) {
-      const e = { id: String(Date.now()), time: new Date().toISOString(), mode: this.data.mode, q, a: results.map(r => ({ n: r.model_name, a: r.answer, ragas: r.ragas || null })) };
-      this.data.history.unshift(e);
+      const key = this.normalizeQuestion(q);
+      const existingIndex = this.data.history.findIndex(h => this.normalizeQuestion(h.q) === key && h.mode === this.data.mode);
+      const entry = { id: String(Date.now()), time: new Date().toISOString(), mode: this.data.mode, q, a: results.map(r => ({ n: r.model_name, a: r.answer, ragas: r.ragas || null })) };
+      if (existingIndex >= 0) {
+        this.data.history.splice(existingIndex, 1);
+      }
+      this.data.history.unshift(entry);
       this.data.history = this.data.history.slice(0, 100);
       localStorage.setItem('activity_history', JSON.stringify(this.data.history));
     },
@@ -614,6 +938,7 @@
     clearHistory() { if (confirm('Clear?')) { this.data.history = []; localStorage.removeItem('activity_history'); this.renderHistory(); } },
     
     escapeHtml(t) { return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); },
+    escapeHtmlAttr(t) { return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); },
   };
   
   app.init();

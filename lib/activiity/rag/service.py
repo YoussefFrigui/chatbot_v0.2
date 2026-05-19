@@ -30,9 +30,11 @@ from qdrant_client import QdrantClient, AsyncQdrantClient, models as qm
 
 from lib.activiity.config import CFG, UA_IDS, collection_name
 from lib.activiity.providers.factory import build_llm, build_synth_llm, build_embed
+from chatbot.config import CFG as CHAT_CFG
 from lib.activiity.prompts.defaults_fr import (
-    SYSTEM_FR, QA_FR, REFINE_FR, tool_desc_ua, TOOL_DESC_GLOBAL,
-    SLM_SYSTEM_FR, SLM_QA_FR, SLM_REFINE_FR,
+    TOOL_DESC_GLOBAL,
+    select_prompt_pack,
+    tool_desc_ua,
 )
 
 OR_API = "https://openrouter.ai/api/v1/chat/completions"
@@ -114,14 +116,10 @@ class AgenticRagService:
         )
         self.index = VectorStoreIndex.from_vector_store(self.vstore)
 
-        if CFG.slm_mode:
-            self._qa_tmpl = PromptTemplate(SLM_QA_FR)
-            self._refine_tmpl = PromptTemplate(SLM_REFINE_FR)
-            self._system_prompt = SLM_SYSTEM_FR
-        else:
-            self._qa_tmpl = PromptTemplate(QA_FR)
-            self._refine_tmpl = PromptTemplate(REFINE_FR)
-            self._system_prompt = SYSTEM_FR
+        system_prompt, qa_prompt, refine_prompt = select_prompt_pack(CHAT_CFG.slm_mode)
+        self._qa_tmpl = PromptTemplate(qa_prompt)
+        self._refine_tmpl = PromptTemplate(refine_prompt)
+        self._system_prompt = system_prompt
 
         # Shared list: all tools append their retrieved nodes here.
         self._synth_nodes: list = []
@@ -190,7 +188,7 @@ class AgenticRagService:
             llm=self.llm,
             system_prompt=self._system_prompt,
             max_iterations=CFG.max_iterations,
-            timeout=180,
+            timeout=CFG.agent_timeout_s,
             verbose=False,
         )
 

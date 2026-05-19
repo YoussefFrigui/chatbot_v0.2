@@ -16,6 +16,7 @@ EVAL_CONFIG = {
     "slm_mode": True,
     "max_iterations": 2,
     "use_reranker": False,
+    "agent_timeout_s": 180,
 }
 # =============================================================================
 DATA_DIR = Path(os.getenv("ACTIVIITY_DATA_DIR", str(ROOT / "data")))
@@ -95,6 +96,12 @@ class Cfg:
         if "max_iterations" in EVAL_CONFIG:
             return EVAL_CONFIG["max_iterations"]
         return int(os.getenv("AGENT_MAX_ITER", "2"))
+
+    @property
+    def agent_timeout_s(self) -> int:
+        if "agent_timeout_s" in EVAL_CONFIG:
+            return int(EVAL_CONFIG["agent_timeout_s"])
+        return int(os.getenv("AGENT_TIMEOUT_S", "180"))
 
     @property
     def use_reranker(self) -> bool:

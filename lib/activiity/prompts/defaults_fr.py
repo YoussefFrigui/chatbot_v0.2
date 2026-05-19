@@ -37,7 +37,7 @@ SYSTEM_FR = (
     "« Je ne trouve pas cette information dans la base Activiity. »\n"
     "dans CHACUN de ces cas :\n"
     " • La question porte sur un sujet hors management/coaching "
-    "(météo, sport, politique, vie privée, science, technique générale…).\n"
+    "(météo, sport, vie privée, science, technique générale…).\n"
     " • Les outils de recherche renvoient des extraits qui ne traitent "
     "PAS directement la question (ne te contente pas d'un sujet vaguement "
     "proche : l'extrait doit répondre à la question posée).\n"
@@ -199,6 +199,12 @@ SLM_REFINE_FR = (
     "- Jamais de connaissance externe ni d'interprétation générique des UA\n"
     "- Réponse naturelle : développe si nécessaire, reste concis si suffisant."
 )
+
+
+def select_prompt_pack(slm_mode: bool) -> tuple[str, str, str]:
+  if slm_mode:
+    return SLM_SYSTEM_FR, SLM_QA_FR, SLM_REFINE_FR
+  return SYSTEM_FR, QA_FR, REFINE_FR
 
 SLM_ROUTING_EXAMPLES = [
     ("Comment motiver mon équipe?", "query_ua_4"),

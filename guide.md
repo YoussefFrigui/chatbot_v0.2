@@ -12,7 +12,7 @@ This guide is for one unified chatbot run where both modes are available at the 
 | Python 3.12+ | Local run and ingestion scripts | [python.org](https://python.org) |
 | OpenRouter API key | Model inference | [openrouter.ai/keys](https://openrouter.ai/keys) |
 | Docker | Qdrant service (agentic) | [docker.com](https://docker.com) |
-| Ollama | Embedding service (runs in its own Docker container) | Pulled automatically via `docker compose`. For local runs: [ollama.com](https://ollama.com) → `ollama pull bge-m3` |
+| Ollama | Embedding service (runs in its own Docker container) | Pulled automatically via `docker compose run --rm ollama-pull`. For local runs: [ollama.com](https://ollama.com) → `ollama pull bge-m3` |
 | OpenAI API key | Alternative embedding provider (no Ollama needed) | [platform.openai.com](https://platform.openai.com) — set `EMBED_PROVIDER=openai` |
 
 ---
@@ -109,65 +109,40 @@ Three separate containers, each doing one thing:
 
 **Important ordering:** Start infrastructure first (Ollama + Qdrant), prepare them (pull model + ingest), then start the chatbot last. If the chatbot starts before Ollama has bge-m3, embedding calls will fail.
 
-### Step 1 — Start the infrastructure containers
+### Step 1 — Full Docker Compose flow (recommended)
+
+Run these commands in order:
 
 ```powershell
-# Start only Qdrant and Ollama (not the chatbot yet)
+# 1) Build images
+docker compose build
+
+# 2) Start infra
 docker compose up -d qdrant ollama
-```
 
-### Step 2 — Pull the embedding model in Ollama
+# 3) Pull bge-m3 into Ollama
+docker compose run --rm ollama-pull
 
-Without this step, the chatbot cannot embed questions and will return errors.
+# 4) Ingest data into Qdrant
+docker compose run --rm ingest
 
-```powershell
-docker exec activiity-ollama ollama pull bge-m3
-```
-
-Verify:
-```powershell
-docker exec activiity-ollama ollama list
-```
-You should see `bge-m3` in the list.
-
-### Step 3 — Ingest the knowledge base into Qdrant
-
-This reads the 28 documents from `data/`, splits them into chunks, embeds them via Ollama, and uploads to Qdrant. Required for agentic mode.
-
-Since the chatbot container is not running yet, run ingestion from your host machine:
-
-```powershell
-$env:QDRANT_URL = "http://localhost:6333"
-$env:EMBED_PROVIDER = "ollama"
-$env:OLLAMA_EMBED_MODEL = "bge-m3"
-python -m lib.activiity.ingest.cli
-```
-
-Expected output:
-```
-[ingest] QDRANT_URL=http://localhost:6333
-...
-"points_count": 880
-```
-
-Only needed once. To re-ingest after changing documents:
-```powershell
-python -m lib.activiity.ingest.cli --force
-```
-
-### Step 4 — Build and start the chatbot (LAST)
-
-Only do this after the previous steps complete.
-
-```powershell
-# Build the chatbot image
-docker compose build chatbot
-
-# Start the chatbot container
+# 5) Start chatbot
 docker compose up -d chatbot
 ```
 
 Open http://localhost:8788. Both naive and agentic modes work.
+
+If your Docker Compose supports `service_completed_successfully`, you can also run:
+
+```powershell
+docker compose up -d
+```
+
+Re-ingest after changing documents:
+
+```powershell
+docker compose run --rm ingest python -m lib.activiity.ingest.cli --force
+```
 
 ### Step 5 — Verify everything
 
@@ -252,12 +227,22 @@ curl -Method Post http://localhost:8788/api/chat/compare -ContentType "applicati
 | `LLM_PROVIDER` | `openrouter` | Inference provider |
 | `LLM_MODEL` | `qwen/qwen3-8b` | Default generation/router model |
 | `SYNTH_MODEL` | `qwen/qwen3-14b` | Agentic synthesis model |
-| `SLM_MODE` | `0` | Shorter prompts for small models |
+| `SLM_MODE` | `0` | Shorter prompts for small models (only used when `SLM_MODE_OVERRIDE` is `None`) |
 | `QDRANT_URL` | `http://localhost:6333` | Qdrant endpoint (agentic) |
 | `QDRANT_COLLECTION` | `activiity_kb` | Base collection name |
 | `EMBED_PROVIDER` | `ollama` | `ollama` or `openai` for ingestion/embedding |
 | `OLLAMA_EMBED_MODEL` | `bge-m3` | Ollama embedding model |
 | `OPENAI_EMBED_MODEL` | `text-embedding-3-small` | OpenAI embedding model |
+
+### Prompt Mode (code override)
+
+Prefer setting prompt length directly in code:
+
+- `SLM_MODE_OVERRIDE = True` → longer, more natural answers
+- `SLM_MODE_OVERRIDE = False` → shorter, stricter answers
+- `SLM_MODE_OVERRIDE = None` → fall back to `SLM_MODE` env var
+
+Set this in [chatbot/config.py](chatbot/config.py).
 
 ---
 

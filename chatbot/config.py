@@ -19,6 +19,8 @@ from pathlib import Path
 # Defaults
 # ---------------------------------------------------------------------------
 
+SLM_MODE_OVERRIDE: bool | None = True
+
 CHAT_CONFIG = {
     "bot_name": "Activiity",
     "bot_description": "Assistant management & coaching — Fiches Protocole UA-1..UA-10",
@@ -156,6 +158,8 @@ class ChatCfg:
     # --- RAG / agent ---
     @property
     def slm_mode(self) -> bool:
+        if SLM_MODE_OVERRIDE is not None:
+            return SLM_MODE_OVERRIDE
         return _env("SLM_MODE", "1" if CHAT_CONFIG["slm_mode"] else "0") == "1"
 
     @property
